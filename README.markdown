@@ -1,2 +1,6 @@
-This is a project to have a little fun with game development in Python 3.
+## Dependencies
+
+-Haskell
+-Data.Array module
+-FieldTrip  (future)
 
