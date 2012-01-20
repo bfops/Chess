@@ -1,6 +1,6 @@
 ## Dependencies
 
--Haskell
--Data.Array module
--FieldTrip  (future)
+ - Haskell
+ - Data.Array module
+ - FieldTrip  (future)
 
