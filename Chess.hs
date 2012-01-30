@@ -22,9 +22,9 @@ type Board = Array Y Rank
 initBoard :: Board
 initBoard = listArray (1, 8) $ map (listArray ('A', 'H')) $
                                    ([backRank White, frontRank White] ++ (replicate 4 otherRank) ++ [frontRank Black, backRank Black])
-            where backRank color = map (Just . (color,)) $ [Rook .. King] ++ [Bishop .. Rook]
-                  frontRank color = replicate 8 $ Just (color, Pawn)
-                  otherRank = replicate 8 Nothing
+    where backRank color = map (Just . (color,)) $ [Rook .. King] ++ [Bishop .. Rook]
+          frontRank color = replicate 8 $ Just (color, Pawn)
+          otherRank = replicate 8 Nothing
 
 movePiece :: Board -> Position -> Position -> Maybe Board
 movePiece board p1@(f1, r1) p2 = do (color, piece) <- board!r1!f1
