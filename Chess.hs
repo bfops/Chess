@@ -52,3 +52,5 @@ hasEmptyPath board p1@(f1, r1) p2 = all isEmpty $ map (\(f, r) -> board!r!f) $ p
           path p1 p2 | p1 == p2 = [p1]
                      | otherwise = p1 : path (step p1 p2) p2
 
+move _ _ _ _ = Nothing
+
