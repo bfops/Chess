@@ -1,0 +1,13 @@
+Name:                Chess
+Version:             0.1
+Description:         OMG CHESS.
+License:             MIT
+License-file:        LICENSE
+Author:              Clark Gaebel and Ben Foppa
+Maintainer:          cgaebel@csclub.uwaterloo.ca, eatingstaples@gmail.com
+Build-Type:          Simple
+Cabal-Version:       >=1.2
+
+Executable Chess
+  Main-is:           main.hs
+  Build-Depends:     base >= 4 && < 5
