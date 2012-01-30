@@ -13,7 +13,7 @@ type Position = (X, Y)
 
 class Movable a where
     allowedMovement :: Board -> a -> Position -> [(X, Y)]
-    move :: Board -> Position -> Position -> Color -> a -> Maybe Board
+    move :: Board -> Position -> Position -> a -> Maybe Board
 
 type Tile = Maybe (Color, Piece)
 type Rank = Array X Tile
@@ -28,7 +28,11 @@ initBoard = listArray (1, 8) $ map (listArray ('A', 'H')) $
 
 movePiece :: Board -> Position -> Position -> Maybe Board
 movePiece board p1@(f1, r1) p2 = do (color, piece) <- board!r1!f1
-                                    move board p1 p2 color piece
+                                    guard noFriendlyFire board p2 color
+                                    move board p1 p2 piece
+    where noFriendlFire board (f, r) color = case board!f!r of
+                                                Nothing -> True
+                                                Just (color2, _) -> color /= color2
 
 step :: (Enum a, Ord a) => a -> a -> a
 step x y | x < y = succ x
@@ -40,8 +44,7 @@ stepT (x1, y1) (x2, y2) = (step x1 x2, step y1 y2)
 
 checkEmptyPath :: Board -> Position -> Position -> Maybe ()
 checkEmptyPath board p1@(f1, r1) p2 | p1 == p2 = Just ()
-                                    | otherwise = do checkEmpty (board!r1!f1)
-                                                     checkEmptyPath board (stepT p1 p2) p2
-    where checkEmpty (Just _) = Nothing
-          checkEmpty Nothing = Just ()
+                                    | otherwise = when (isEmpty board!r1!f1) $ checkEmptyPath board (stepT p1 p2) p2
+    where isEmpty Nothing = True
+          isEmpty _ = False
 
