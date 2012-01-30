@@ -1,7 +1,7 @@
 module Main (main)
     where
 
-import Chess.Logic
+import Chess
 
 main = do putStrLn "It'll be impressive later!"
 
