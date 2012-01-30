@@ -22,9 +22,13 @@ type Rank = Array X Tile
 type Board = Array Y Rank
 
 initBoard :: Board
-initBoard = listArray (1, 8) $ map (listArray ('A', 'H')) $
-                                   ([backRank White, frontRank White] ++ (replicate 4 otherRank) ++ [frontRank Black, backRank Black])
-    where backRank color = map (Just . (color,)) $ [Rook .. King] ++ [Bishop .. Rook]
+initBoard = listArray (1, 8) $
+                      map (listArray ('A', 'H')) $
+                          ([backRank White, frontRank White]
+                          ++ (replicate 4 otherRank)
+                          ++ [frontRank Black, backRank Black])
+    where backRank color = map (Just . (color,)) $
+                               [Rook .. King] ++ [Bishop .. Rook]
           frontRank color = replicate 8 $ Just (color, Pawn)
           otherRank = replicate 8 Nothing
 
@@ -34,7 +38,7 @@ movePiece board p1@(f1, r1) p2 = do (color, piece) <- board!r1!f1
                                     move board p1 p2 piece
     where noFriendlyFire board (f, r) color = case board!r!f of
                                                 Nothing -> True
-                                                Just (color2, _) -> color /= color2
+                                                Just (c2, _) -> color /= c2
 
 step :: (Ord a, Enum a, Ord b, Enum b) => (a, b) -> (a, b) -> (a, b)
 step (x1, y1) (x2, y2) = (step' x1 x2, step' y1 y2)
@@ -45,7 +49,8 @@ step (x1, y1) (x2, y2) = (step' x1 x2, step' y1 y2)
 
 
 hasEmptyPath :: Board -> Position -> Position -> Bool
-hasEmptyPath board p1@(f1, r1) p2 = all isEmpty $ map (\(f, r) -> board!r!f) $ path p1 p2
+hasEmptyPath board p1@(f1, r1) p2 = all isEmpty $
+                                        map (\(f, r) -> board!r!f) $ path p1 p2
     where isEmpty Nothing = True
           isEmpty _ = False
           path p1 p2 | p1 == p2 = [p1]
