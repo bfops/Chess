@@ -3,5 +3,6 @@ module Main (main)
 
 import Chess
 
+main :: IO ()
 main = do putStrLn "It'll be impressive later!"
 
