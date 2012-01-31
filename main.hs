@@ -2,28 +2,22 @@ module Main (main) where
 
 import Graphics.UI.GLUT
 
-
--- RIPPED FROM THE HELLO.HS OPENGL TUTORIAL.
-
 display :: DisplayCallback
-display = do
-   -- clear all pixels
-   clear [ ColorBuffer ]
+display = do clear [ ColorBuffer ]
 
-   -- draw white polygon (rectangle) with corners at
-   -- (0.25, 0.25, 0.0) and (0.75, 0.75, 0.0)
-   color (Color3 1.0 1.0 (1.0 :: GLfloat))
-   -- resolve overloading, not needed in "real" programs
-   let vertex3f = vertex :: Vertex3 GLfloat -> IO ()
-   renderPrimitive Polygon $ mapM_ vertex3f [
-      Vertex3 0.25 0.25 0.0,
-      Vertex3 0.75 0.25 0.0,
-      Vertex3 0.75 0.75 0.0,
-      Vertex3 0.25 0.75 0.0]
+             -- draw white polygon (rectangle) with corners at
+             -- (0.25, 0.25, 0.0) and (0.75, 0.75, 0.0)
+             color (Color3 1.0 1.0 (1.0 :: GLfloat))
+             -- resolve overloading, not needed in "real" programs
+             let vertex3f = vertex :: Vertex3 GLfloat -> IO ()
+             renderPrimitive Polygon $ mapM_ vertex3f [
+                 Vertex3 0.25 0.25 0.0,
+                 Vertex3 0.75 0.25 0.0,
+                 Vertex3 0.75 0.75 0.0,
+                 Vertex3 0.25 0.75 0.0]
 
-   -- don't wait!
-   -- start processing buffered OpenGL routines
-   flush
+             -- start processing buffered OpenGL routines
+             swapBuffers
 
 myInit :: IO ()
 myInit = do
@@ -42,10 +36,10 @@ myInit = do
 main :: IO ()
 main = do
    _ <- getArgsAndInitialize
-   initialDisplayMode $= [ SingleBuffered, RGBMode ]
-   initialWindowSize $= Size 250 250
-   initialWindowPosition $= Position 100 100
-   _ <- createWindow "hello"
+   initialDisplayMode $= [ DoubleBuffered, RGBMode ]
+   initialWindowSize $= Size 800 600
+   initialWindowPosition $= Position 0 0
+   _ <- createWindow "hello, world!"
    myInit
    displayCallback $= display
    mainLoop
