@@ -12,9 +12,9 @@ data Color = White | Black
 data Piece = Pawn | Rook | Knight | Bishop | Queen | King
     deriving (Enum, Eq, Ord)
 
-type X = Char
-type Y = Integer
-type Position = (X, Y)
+type File = Char
+type Rank = Integer
+type Position = (File, Rank)
 
 class Movable a where
     move :: Board -> Position -> Position -> a -> Maybe Board
@@ -40,7 +40,7 @@ movePiece board src dest = do (color, piece) <- board!src
                               move board src dest piece
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color target = fromMaybe False $ fmap (isSameColor color) target
-          isSameColor color (color', _) = color == color'
+          isSameColor color = (color ==) . fst
 
 step :: (Ord a, Enum a, Ord b, Enum b) => (a, b) -> (a, b) -> (a, b)
 step (x1, y1) (x2, y2) = (step' x1 x2, step' y1 y2)
