@@ -2,3 +2,4 @@
 *.o
 *.a
 dist/
+report.html
