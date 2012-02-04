@@ -53,8 +53,7 @@ hasEmptyPath :: Board -> Position -> Position -> Bool
 hasEmptyPath board origin dest = all isNothing $ map (board!) $ path origin dest
     where path origin dest = unfoldr unfoldStep origin
           unfoldStep pos = if pos == dest then Nothing
-                           else Just (pos', pos')
-          pos' = step pos' dest
+                           else Just (step pos dest, step pos dest)
 
 instance Movable Piece where
     move _ _ _ _ = Nothing
