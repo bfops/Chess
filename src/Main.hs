@@ -1,5 +1,7 @@
 module Main (main) where
 
+import Chess()
+
 import Graphics.UI.GLUT
 
 display :: DisplayCallback

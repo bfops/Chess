@@ -11,8 +11,7 @@ Cabal-Version:       >= 1.9.2
 
 Executable Chess
     hs-source-dirs:    src/
-    Main-is:           main.hs
-    extensions:        TupleSections
+    Main-is:           Main.hs
     GHC-Options:       -Wall
 
     Build-Depends:     base >= 4 && < 5,

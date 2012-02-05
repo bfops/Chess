@@ -1,5 +1,5 @@
-module Chess
-    where
+{-# LANGUAGE TupleSections #-}
+module Chess where
 
 import Data.Array.IArray
 import Data.Maybe
@@ -36,7 +36,7 @@ initBoard = listArray (('A', 1), ('H', 8)) $
 
 movePiece :: Board -> Position -> Position -> Maybe Board
 movePiece board src dest = do (color, piece) <- board!src
-                              guard . not $ isFriendlyFire color $ board!dest
+                              guard . not . isFriendlyFire color $ board!dest
                               move board src dest piece
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color target = fromMaybe False $ fmap (isSameColor color) target
