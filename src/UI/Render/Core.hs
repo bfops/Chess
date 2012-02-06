@@ -1,7 +1,7 @@
 module UI.Render.Core ( Offset
                       , HAlign(..)
                       , VAlign(..)
-                      , Position
+                      , Coord
                       , Dimensions
                       , Renderer(..)
                       , defaultRenderer
