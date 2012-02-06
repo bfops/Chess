@@ -1,11 +1,16 @@
-module UI.Render.Core ( Offset
+-- | The render core defines the basic types and helper functions for a basic
+--   UI system.
+--
+--   The fundamental data type is the 'Renderer', which is declared in a
+--   hierarchical fashion.
+module UI.Render.Core ( Renderer(..)
+                      , Offset
+                      , defaultRenderer
+                      , updateWindow
                       , HAlign(..)
                       , VAlign(..)
                       , Coord
                       , Dimensions
-                      , Renderer(..)
-                      , defaultRenderer
-                      , updateWindow
                       ) where
 
 import Control.Monad
@@ -53,9 +58,9 @@ type Dimensions = (Int, Int)
 --   >                        , dims = (50, 50)
 --   >                        }
 data Renderer = Renderer { render :: IO () -- ^ Draws the object onto the screen. You
-                                      --   don't have to worry about positioning,
-                                      --   as this is automatically handled using
-                                      --   the 'pos' field.
+                                          --   don't have to worry about positioning,
+                                          --   as this is automatically handled using
+                                          --   the 'pos' field.
 
                          , pos :: Coord -- ^ The position of the bottom-left
                                        --   corner of the object, relative

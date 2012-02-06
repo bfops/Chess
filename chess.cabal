@@ -23,6 +23,7 @@ Executable Chess
                        zlib-conduit ==0.*,
                        GLUT ==2.*,
                        JuicyPixels ==1.*,
+                       hslogger ==1.*,
                        array < 1
 
 test-suite ChessTests

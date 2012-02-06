@@ -1,0 +1,3 @@
+#!/bin/sh
+
+cabal haddock --hyperlink-source --executables
