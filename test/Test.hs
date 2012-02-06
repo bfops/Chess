@@ -9,6 +9,8 @@ import Test.HUnit
 
 import Data.List
 
+import UI.Render -- Just make sure it gets built.
+
 main = defaultMain tests
 
 tests = [

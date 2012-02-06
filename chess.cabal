@@ -14,14 +14,15 @@ Executable Chess
     Main-is:           Main.hs
     GHC-Options:       -Wall
 
-    Build-Depends:     base >= 4 && < 5,
-                       stm >= 2 && < 3,
-                       aeson >= 0.6 && < 1,
-                       conduit,
-                       attoparsec-conduit < 1,
-                       zlib >= 0.5.3.1 && < 0.5.3.2,
-                       zlib-conduit < 1,
-                       GLUT >= 2.2 && < 3,
+    Build-Depends:     base ==4.*,
+                       stm ==2.*,
+                       aeson ==0.*,
+                       conduit ==0.*,
+                       attoparsec-conduit ==0.*,
+                       zlib ==0.5.3.1,
+                       zlib-conduit ==0.*,
+                       GLUT ==2.*,
+                       JuicyPixels ==1.*,
                        array < 1
 
 test-suite ChessTests
@@ -34,4 +35,6 @@ test-suite ChessTests
                     HUnit,
                     test-framework,
                     test-framework-hunit,
-                    test-framework-quickcheck2
+                    test-framework-quickcheck2,
+                    GLUT ==2.*,
+                    JuicyPixels ==1.*
