@@ -1,6 +1,7 @@
 module Main (main) where
 
 import Graphics.UI.GLUT
+import Chess
 
 display :: DisplayCallback
 display = do clear [ ColorBuffer ]
