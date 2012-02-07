@@ -1,48 +1,45 @@
 module Main (main) where
 
 import Chess()
-import UI.Render()
+import Config
+import System.Log.Logger
+import UI.Render
 
 import Graphics.UI.GLUT
 
-display :: DisplayCallback
-display = do clear [ ColorBuffer ]
+display :: Window -> DisplayCallback
+display w = do let rectangle = (rectangleRenderer 100 100 (Color3 1.0 1.0 (1.0 :: GLfloat)))
+                                 { vAlign = Just (VCenterAlign 0)
+                                 , hAlign = Just (HCenterAlign 0)
+                                 }
 
-             -- draw white polygon (rectangle) with corners at
-             -- (0.25, 0.25, 0.0) and (0.75, 0.75, 0.0)
-             color (Color3 1.0 1.0 (1.0 :: GLfloat))
-             -- resolve overloading, not needed in "real" programs
-             let vertex3f = vertex :: Vertex3 GLfloat -> IO ()
-             renderPrimitive Polygon $ mapM_ vertex3f [
-                 Vertex3 0.25 0.25 0.0,
-                 Vertex3 0.75 0.25 0.0,
-                 Vertex3 0.75 0.75 0.0,
-                 Vertex3 0.25 0.75 0.0]
+               updateWindow w rectangle
 
-             -- start processing buffered OpenGL routines
-             swapBuffers
+myInit :: Window -> IO ()
+myInit w = do currentWindow $= Just w
+              -- select clearing color
+              clearColor $= Color4 0 0 0 0
 
-myInit :: IO ()
-myInit = do
-   -- select clearing color
-   clearColor $= Color4 0 0 0 0
+              Size windowWidth windowHeight <- get windowSize
 
-   -- initialize viewing values
-   matrixMode $= Projection
-   loadIdentity
-   ortho 0 1 0 1 (-1) 1
+              infoM "Main.myInit" $ "Window dimensions: " ++ show windowWidth ++ "x" ++ show windowHeight
+
+              -- initialize viewing values
+              matrixMode $= Projection
+              loadIdentity
+              ortho2D 0 (fromIntegral windowWidth) 0 (fromIntegral windowHeight)
 
 -- Declare initial window size, position, and display mode (single buffer and
 -- RGBA). Open window with "hello" in its title bar. Call initialization
 -- routines. Register callback function to display graphics. Enter main loop and
 -- process events.
 main :: IO ()
-main = do
-   _ <- getArgsAndInitialize
-   initialDisplayMode $= [ DoubleBuffered, RGBMode ]
-   initialWindowSize $= Size 800 600
-   initialWindowPosition $= Position 0 0
-   _ <- createWindow "hello, world!"
-   myInit
-   displayCallback $= display
-   mainLoop
+main = do updateGlobalLogger rootLoggerName (setLevel logLevel)
+          _ <- getArgsAndInitialize
+          initialDisplayMode $= [ DoubleBuffered, RGBMode ]
+          initialWindowSize $= Size 800 600
+          initialWindowPosition $= Position 0 0
+          w <- createWindow "hello, world!"
+          myInit w
+          displayCallback $= display w
+          mainLoop

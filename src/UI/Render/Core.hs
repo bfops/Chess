@@ -126,8 +126,8 @@ absPos parentDims r = let x' = case hAlign r of
 
                           y' = case vAlign r of
                                   Nothing                 -> y
-                                  Just (TopAlign off)     -> off
-                                  Just (BottomAlign off)  -> pdy - dy + off
+                                  Just (BottomAlign off)  -> off
+                                  Just (TopAlign off)     -> pdy - dy + off
                                   Just (VCenterAlign off) -> (pdy - dy) `div` 2 + off
                        in (x', y')
     where
@@ -144,6 +144,7 @@ updateWindow :: Window -> Renderer -> IO ()
 updateWindow w rs = do currentWindow $= Just w
                        Size x y <- get windowSize
                        clear [ ColorBuffer ]
+                       matrixMode $= Modelview 0
                        loadIdentity
                        render' (fromIntegral x, fromIntegral y) rs
                        swapBuffers
