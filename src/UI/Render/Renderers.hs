@@ -9,7 +9,7 @@ import Codec.Picture.Types
 import Data.Array.Storable
 import Data.Array.Unboxed
 import Data.Word
-import qualified Graphics.UI.GLUT as GLUT
+import qualified Graphics.UI.GLUT as GL
 import System.Log.Logger
 import UI.Render.Core
 
@@ -78,7 +78,7 @@ textRenderer fontName label = defaultRenderer { render = renderText fontName lab
                                               }
 
 -- | A simple demo renderer for a rectangle.
-rectangleRenderer :: GLUT.Color a
+rectangleRenderer :: GL.Color a
                   =>  Int -- ^ The width of the desired rectangle.
                   -> Int  -- ^ The height of the desired rectangle.
                   -> a    -- ^ The color of the desired rectangle.
@@ -88,15 +88,15 @@ rectangleRenderer width height color = defaultRenderer { render = rectRender
                                                        }
     where
         rectRender :: IO ()
-        rectRender = do GLUT.color color
-                        let vertex3f = GLUT.vertex :: GLUT.Vertex3 GLUT.GLfloat -> IO ()
-                        GLUT.renderPrimitive GLUT.Polygon $ mapM_ vertex3f
-                            [ GLUT.Vertex3 left bottom 0.0
-                            , GLUT.Vertex3 right bottom 0.0
-                            , GLUT.Vertex3 right top 0.0
-                            , GLUT.Vertex3 left top 0.0
+        rectRender = do GL.color color
+                        let vertex3f = GL.vertex :: GL.Vertex3 GL.GLfloat -> IO ()
+                        GL.renderPrimitive GL.Polygon $ mapM_ vertex3f
+                            [ GL.Vertex3 left bottom 0.0
+                            , GL.Vertex3 right bottom 0.0
+                            , GL.Vertex3 right top 0.0
+                            , GL.Vertex3 left top 0.0
                             ]
         top = fromIntegral height
         bottom = 0.0
-        left = 0.0
+        left = 0
         right = fromIntegral width
