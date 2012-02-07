@@ -101,44 +101,6 @@ preloadTextures (TextureCache tc) texts =
                                          diskToGraphics chan
                                      Nothing  -> return ()
 
--- | Lets us pass a function "through" a dynamic image, ignoring its type and
---   getting right down to the raw data.
-dynToStaticImage :: (forall a. Image a -> b) -> DynamicImage -> b
-dynToStaticImage f (ImageY8 img)     = f img
-dynToStaticImage f (ImageYA8 img)    = f img
-dynToStaticImage f (ImageRGB8 img)   = f img
-dynToStaticImage f (ImageRGBA8 img)  = f img
-dynToStaticImage f (ImageYCbCr8 img) = f img
-
--- | Gets a dynamic image's width.
-imageWidth' :: DynamicImage -> Int
-imageWidth' = dynToStaticImage PicTypes.imageWidth
-
--- | Gets a dynamic image's height.
-imageHeight' :: DynamicImage -> Int
-imageHeight' = dynToStaticImage PicTypes.imageHeight
-
--- | Gets the raw bytes associated with a dynamic image.
-imageData' :: DynamicImage -> V.Vector Word8
-imageData' = dynToStaticImage imageData
-
--- | Parses the image's type and returns the appropriate OpenGL internal pixel
---   format.
-internalPixelFormat :: DynamicImage -> GL.PixelInternalFormat
-internalPixelFormat (ImageY8 _)     = GL.Luminance8
-internalPixelFormat (ImageYA8 _)    = GL.Luminance8Alpha8
-internalPixelFormat (ImageRGB8 _)   = GL.RGB8
-internalPixelFormat (ImageRGBA8 _)  = GL.RGBA8
-internalPixelFormat (ImageYCbCr8 _) = error "OpenGL does not support YCbCr images. Convert it to RGB8 first."
-
--- | Parses the image's type and returns the appropriate OpenGL pixel format.
-pixelFormat :: DynamicImage -> GL.PixelFormat
-pixelFormat (ImageY8 _)     = GL.Luminance
-pixelFormat (ImageYA8 _)    = GL.LuminanceAlpha
-pixelFormat (ImageRGB8 _)   = GL.RGB
-pixelFormat (ImageRGBA8 _)  = GL.RGBA
-pixelFormat (ImageYCbCr8 _) = GL.YCBCR422
-
 -- | OpenGL can't handle the JPEG color space without extensions, so just do it
 --   in software if we every encounter it. Hopefully, this won't happen too
 --   often since normal people don't use JPEG.
@@ -197,3 +159,41 @@ clearCache :: TextureCache -> IO ()
 clearCache (TextureCache tc) = do cache <- readIORef tc
                                   GL.deleteObjectNames $ map (texHandle . snd) cache
                                   writeIORef tc []
+
+-- | Lets us pass a function "through" a dynamic image, ignoring its type and
+--   getting right down to the raw data.
+dynToStaticImage :: (forall a. Image a -> b) -> DynamicImage -> b
+dynToStaticImage f (ImageY8 img)     = f img
+dynToStaticImage f (ImageYA8 img)    = f img
+dynToStaticImage f (ImageRGB8 img)   = f img
+dynToStaticImage f (ImageRGBA8 img)  = f img
+dynToStaticImage f (ImageYCbCr8 img) = f img
+
+-- | Gets a dynamic image's width.
+imageWidth' :: DynamicImage -> Int
+imageWidth' = dynToStaticImage PicTypes.imageWidth
+
+-- | Gets a dynamic image's height.
+imageHeight' :: DynamicImage -> Int
+imageHeight' = dynToStaticImage PicTypes.imageHeight
+
+-- | Gets the raw bytes associated with a dynamic image.
+imageData' :: DynamicImage -> V.Vector Word8
+imageData' = dynToStaticImage imageData
+
+-- | Parses the image's type and returns the appropriate OpenGL internal pixel
+--   format.
+internalPixelFormat :: DynamicImage -> GL.PixelInternalFormat
+internalPixelFormat (ImageY8 _)     = GL.Luminance8
+internalPixelFormat (ImageYA8 _)    = GL.Luminance8Alpha8
+internalPixelFormat (ImageRGB8 _)   = GL.RGB8
+internalPixelFormat (ImageRGBA8 _)  = GL.RGBA8
+internalPixelFormat (ImageYCbCr8 _) = error "OpenGL does not support YCbCr images. Convert it to RGB8 first."
+
+-- | Parses the image's type and returns the appropriate OpenGL pixel format.
+pixelFormat :: DynamicImage -> GL.PixelFormat
+pixelFormat (ImageY8 _)     = GL.Luminance
+pixelFormat (ImageYA8 _)    = GL.LuminanceAlpha
+pixelFormat (ImageRGB8 _)   = GL.RGB
+pixelFormat (ImageRGBA8 _)  = GL.RGBA
+pixelFormat (ImageYCbCr8 _) = GL.YCBCR422
