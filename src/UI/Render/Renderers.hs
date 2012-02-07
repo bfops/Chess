@@ -4,72 +4,90 @@ module UI.Render.Renderers ( rectangleRenderer
                            , textRenderer
                            ) where
 
-import Codec.Picture
-import Codec.Picture.Types
-import Data.Array.Storable
-import Data.Array.Unboxed
-import Data.Word
-import qualified Graphics.UI.GLUT as GL
-import System.Log.Logger
+import qualified Graphics.Rendering.OpenGL.GL as GL
+import Graphics.UI.GLUT as GLUT
+import UI.Colors
+import UI.TextureCache
 import UI.Render.Core
 
--- | This data structure is temporary. Eventually, this will just be a handle
---   to the right texture id on the graphics card.
-data RenderableImage = RenderableImage { rImageWidth  :: Int
-                                       , rImageHeight :: Int
-                                       , rImageData   :: StorableArray Int Word8
-                                       }
+-- | Sends the draw command for one vertex. Meant to be used in renderPrimitive
+--   and its ilk.
+vertex' :: Int -> Int -> IO ()
+vertex' x y = GL.vertex $ (GL.Vertex2 :: GLdouble
+                                      -> GLdouble
+                                      -> GL.Vertex2 GLUT.GLdouble)
+                              (fromIntegral x)
+                              (fromIntegral y)
 
-renderTexture :: RenderableImage -> IO ()
-renderTexture _ = return ()
+-- | Just like 'vertex', except for a texture coordinate.
+--
+--   See: 'vertex'
+texCoord' :: Int -> Int -> IO ()
+texCoord' x y = GL.texCoord $ (GL.TexCoord2 :: GLdouble
+                                            -> GLdouble
+                                            -> GL.TexCoord2 GLdouble)
+                                  (fromIntegral x)
+                                  (fromIntegral y)
 
-dynToStaticImage :: (forall a. Image a -> b) -> DynamicImage -> b
-dynToStaticImage f (ImageY8 img)     = f img
-dynToStaticImage f (ImageYA8 img)    = f img
-dynToStaticImage f (ImageRGB8 img)   = f img
-dynToStaticImage f (ImageRGBA8 img)  = f img
-dynToStaticImage f (ImageYCbCr8 img) = f img
+-- | The width and height of the "no texture" box.
+noTexDims :: Dimensions
+noTexDims = (100, 100)
 
-imageWidth' :: DynamicImage -> Int
-imageWidth' = dynToStaticImage imageWidth
+renderTexture :: Maybe Texture -> IO ()
+-- If we don't have a texture to render, just draw a 100x100 placeholder box.
+renderTexture Nothing  = renderPrimitive' GL.Lines red [ (0, 0)
+                                                       , (fst noTexDims, 0)
+                                                       , (fst noTexDims, snd noTexDims)
+                                                       , (0, snd noTexDims)
+                                                       ]
+renderTexture (Just tex) = do GL.textureWrapMode GL.Texture2D GL.S $= (GL.Repeated, GL.Repeat)
+                              GL.textureWrapMode GL.Texture2D GL.T $= (GL.Repeated, GL.Repeat)
+                              GL.textureFilter   GL.Texture2D      $= ((GL.Nearest, Nothing), GL.Nearest)
+                              -- Do nearest neighbor interpolation.
 
-imageHeight' :: DynamicImage -> Int
-imageHeight' = dynToStaticImage imageHeight
+                              -- Enable texturing.
+                              GL.texture GL.Texture2D $= GL.Enabled
+                              GL.textureFunction      $= GL.Combine
 
-imageData' :: DynamicImage -> UArray Int Word8
-imageData' = dynToStaticImage imageData
+                              -- Set current texture.
+                              GL.textureBinding GL.Texture2D $= Just (texHandle tex)
 
-loadImage :: String -> IO RenderableImage
-loadImage texName = do wrappedTex <- readImage texName
-                       case wrappedTex of
-                            Left err -> errorM "UI.Render.TextureRenderer" ("Could not load texture '" ++ texName ++ "': " ++ err)
-                                     >> loadImage "texture-not-found.png"
-                            Right rawTex -> makeRenderable rawTex
+                              -- Blam! Draw that textured square. We must move clockwise
+                              -- from the top left of the image, so sayeth OpenGL.
+                              GL.renderPrimitive GL.Polygon $ do texCoord' 0 0; vertex' left top;
+                                                                 texCoord' 1 0; vertex' right top;
+                                                                 texCoord' 1 1; vertex' right bottom;
+                                                                 texCoord' 0 1; vertex' left bottom;
+
+                              GL.texture GL.Texture2D $= GL.Disabled
     where
-        makeRenderable :: DynamicImage -> IO RenderableImage
-        makeRenderable img = do stArray <- unsafeThaw $ imageData' img
-                                return RenderableImage { rImageWidth = imageWidth' img
-                                                       , rImageHeight = imageHeight' img
-                                                       , rImageData = stArray
-                                                       }
+        left = 0
+        right = texWidth tex
+        top = texHeight tex
+        bottom = 0
 
 renderText :: String -> String -> IO ()
 renderText _ _ = undefined
 
--- | Loads a texture, and returns a new renderer for it.
+-- | Loads a texture, and returns a new renderer for it. NOTE: This function is
+--   not thread-safe with respect to the texture cache.
 --
 --   Usage:
 --
 --   > coinTex <- textureRenderer "coin.png"
---   > updateWindow w $ coinTex' { vAlign = VCenterAlign 0
---   >                           , hAlign = HCenterAlign 0
---   >                           , children = getCoinChildren
---   >                           }
-textureRenderer :: String -> IO Renderer
-textureRenderer name = do rawTex <- loadImage name
-                          return $ defaultRenderer { render = renderTexture rawTex
-                                                   , dims   = (rImageWidth rawTex, rImageHeight rawTex)
-                                                   }
+--   > updateWindow w $ coinTex { vAlign = VCenterAlign 0
+--   >                          , hAlign = HCenterAlign 0
+--   >                          , children = getCoinChildren
+--   >                          }
+textureRenderer :: TextureCache -> String -> IO Renderer
+textureRenderer tc name = do tex <- loadTexture tc name
+                             return $ defaultRenderer { render = renderTexture tex
+                                                      , dims   = dims' tex
+                                                      }
+    where
+        dims' tex = case tex of
+                        Just tex' -> (texWidth tex', texHeight tex')
+                        Nothing   -> noTexDims
 
 textRenderer :: String -- ^ The name of the font we will use for rendering.
              -> String -- ^ The string we're drawing.
@@ -77,26 +95,33 @@ textRenderer :: String -- ^ The name of the font we will use for rendering.
 textRenderer fontName label = defaultRenderer { render = renderText fontName label
                                               }
 
+-- | Renders any arbitrary OpenGL primitive.
+renderPrimitive' :: GL.Color a
+                 => PrimitiveMode -- ^ Which primitive we'll be drawing.
+                 -> a             -- ^ The color of the primitive.
+                 -> [(Int, Int)]  -- ^ A list of the primitive's verticies, in
+                                 --   order (preferably clockwise). The tuple is
+                                 --   (x, y).
+                 -> IO ()
+renderPrimitive' primTy col verts = do GL.color col
+                                       GL.renderPrimitive primTy $ mapM_ (uncurry vertex') verts
+
 -- | A simple demo renderer for a rectangle.
 rectangleRenderer :: GL.Color a
                   =>  Int -- ^ The width of the desired rectangle.
                   -> Int  -- ^ The height of the desired rectangle.
                   -> a    -- ^ The color of the desired rectangle.
                   -> Renderer
-rectangleRenderer width height color = defaultRenderer { render = rectRender
-                                                       , dims = (width, height)
-                                                       }
+rectangleRenderer width height col =
+    defaultRenderer { render = renderPrimitive' GL.Polygon col [ (left, top)
+                                                               , (right, top)
+                                                               , (right, bottom)
+                                                               , (left, bottom)
+                                                               ]
+                    , dims = (width, height)
+                    }
     where
-        rectRender :: IO ()
-        rectRender = do GL.color color
-                        let vertex3f = GL.vertex :: GL.Vertex3 GL.GLfloat -> IO ()
-                        GL.renderPrimitive GL.Polygon $ mapM_ vertex3f
-                            [ GL.Vertex3 left bottom 0.0
-                            , GL.Vertex3 right bottom 0.0
-                            , GL.Vertex3 right top 0.0
-                            , GL.Vertex3 left top 0.0
-                            ]
-        top = fromIntegral height
-        bottom = 0.0
+        top = height
+        bottom = 0
         left = 0
-        right = fromIntegral width
+        right = width

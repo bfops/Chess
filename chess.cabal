@@ -8,11 +8,14 @@ Author:              Clark Gaebel and Ben Foppa
 Maintainer:          cgaebel@csclub.uwaterloo.ca, benjamin.foppa@gmail.com
 Build-Type:          Simple
 Cabal-Version:       >= 1.9.2
+Data-Files:          assets/*.png
+Extra-Source-Files:  assets/*.png
 
 Executable Chess
     hs-source-dirs:    src/
     Main-is:           Main.hs
     GHC-Options:       -Wall
+    Other-Modules:     Paths_Chess
 
     Build-Depends:     base ==4.*,
                        stm ==2.*,
@@ -21,10 +24,13 @@ Executable Chess
                        attoparsec-conduit ==0.*,
                        zlib ==0.5.3.1,
                        zlib-conduit ==0.*,
+                       OpenGL ==2.4.*,
                        GLUT ==2.*,
-                       JuicyPixels ==1.*,
+                       JuicyPixels ==1.1,
                        hslogger ==1.*,
-                       array < 1
+                       array < 1,
+                       vector ==0.9.*,
+                       StateVar ==1.*
 
 test-suite ChessTests
     type: exitcode-stdio-1.0
@@ -36,6 +42,4 @@ test-suite ChessTests
                     HUnit,
                     test-framework,
                     test-framework-hunit,
-                    test-framework-quickcheck2,
-                    GLUT ==2.*,
-                    JuicyPixels ==1.*
+                    test-framework-quickcheck2

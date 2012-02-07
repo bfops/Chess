@@ -4,16 +4,22 @@ import Chess()
 import Config
 import System.Log.Logger
 import UI.Render
+import UI.TextureCache
 
 import Graphics.UI.GLUT
 
-display :: Window -> DisplayCallback
-display w = do let rectangle = (rectangleRenderer 100 100 (Color3 1.0 1.0 (1.0 :: GLfloat)))
-                                 { vAlign = Just (VCenterAlign 0)
-                                 , hAlign = Just (HCenterAlign 0)
+display :: Window -> TextureCache -> DisplayCallback
+display w tc = do let rectangle = (rectangleRenderer 10 10 (Color3 1.0 1.0 (1.0 :: GLfloat)))
+                                 { vAlign = Just (TopAlign 10)
+                                 , hAlign = Just (LeftAlign 10)
                                  }
 
-               updateWindow w rectangle
+                  yellowDot <- textureRenderer tc "yellow-dot.png"
+
+                  updateWindow w $ yellowDot { vAlign = Just (VCenterAlign 0)
+                                             , hAlign = Just (HCenterAlign 0)
+                                             , children = [rectangle]
+                                             }
 
 myInit :: Window -> IO ()
 myInit w = do currentWindow $= Just w
@@ -40,6 +46,7 @@ main = do updateGlobalLogger rootLoggerName (setLevel logLevel)
           initialWindowSize $= Size 800 600
           initialWindowPosition $= Position 0 0
           w <- createWindow "hello, world!"
+          tc <- newTextureCache
           myInit w
-          displayCallback $= display w
+          displayCallback $= display w tc
           mainLoop
