@@ -140,6 +140,7 @@ rad2deg rad = rad * 180 / pi
 {-# INLINE rad2deg #-}
 
 -- | Draws the given renderer, and all its children to the provided window.
+--   This should be called every frame, for every window on the screen.
 updateWindow :: Window -> Renderer -> IO ()
 updateWindow w rs = do currentWindow $= Just w
                        Size x y <- get windowSize
