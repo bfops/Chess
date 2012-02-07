@@ -1,5 +1,8 @@
 module Main (main) where
 
+import Chess()
+import UI.Render()
+
 import Graphics.UI.GLUT
 import Chess
 
