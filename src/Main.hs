@@ -4,7 +4,6 @@ import Chess()
 import UI.Render()
 
 import Graphics.UI.GLUT
-import Chess
 
 display :: DisplayCallback
 display = do clear [ ColorBuffer ]
