@@ -4,12 +4,17 @@ module UI.TextureCache ( Texture(..)
                        , TextureHandle
                        , newTextureCache
                        , loadTexture
+                       , preloadTextures
                        , clearCache
                        ) where
 
 import           Codec.Picture                as Pic
 import           Codec.Picture.Types          as PicTypes
+import           Control.Concurrent
+import           Control.Monad
 import           Data.IORef
+import           Data.List
+import           Data.Maybe
 import           Data.StateVar
 import qualified Data.Vector.Storable         as V
 import           Data.Word
@@ -46,14 +51,55 @@ loadTexture :: TextureCache -> String -> IO (Maybe Texture)
 loadTexture (TextureCache tc) name =
         do cache <- readIORef tc
            case lookup name cache of
-               Just tex' -> do debugM "UI.TextureCache" ("Texture cache hit: " ++ name)
-                               return $ Just tex'
+               Just tex -> do debugM "UI.TextureCache" ("Texture cache hit: " ++ name)
+                              return $ Just tex
                Nothing -> do infoM "UI.TextureCache" ("Texture cache miss: " ++ name)
                              tex <- loadTexFromDisk name
                              case tex of
                                 Nothing -> return Nothing
-                                Just tex' -> do writeIORef tc ((name, tex'):cache)
-                                                return $ Just tex'
+                                Just tex' -> do tex'' <- uploadTexToGraphicsCard tex'
+                                                writeIORef tc $ (name, tex''):cache
+                                                return $ Just tex''
+
+-- | Preloads a list of textures into a texture cache. Invalid textures will be
+--   warned about, but should not invalidate the texture cache.
+--   
+--   This is more efficient than calling @map (loadTexture tc)@ because it will
+--   load textures from disk and load textures into graphics memory in parallel.
+preloadTextures :: TextureCache -> [String] -> IO ()
+preloadTextures (TextureCache tc) texts =
+           -- When we've loaded all the textures from disk, Nothing is sent
+           -- down the channel. This indicates that we're all done.
+        do cache <- readIORef tc
+
+           -- We only load uncached items. We detect these by getting all unique
+           -- names, in the new cache, then removing duplicates, and those that
+           -- appeared in the old cache.
+           let cachedNames = map fst cache
+               notCached = (nub . sort $ texts ++ cachedNames) \\ cachedNames
+
+           chan <- newChan
+           _ <- forkIO $ mapM_ (diskLoader chan) notCached >> writeChan chan Nothing
+           diskToGraphics chan
+    where
+        -- Loads a texture 'name' from disk into then given channel.
+        diskLoader :: Chan (Maybe (String, DynamicImage)) -> String -> IO ()
+        diskLoader chan name = do tex <- loadTexFromDisk name
+                                  when (isJust tex)
+                                    . writeChan chan $ Just (name, fromJust tex)
+
+        -- Repeatedly (until Nothing is encountered) reads items from the given
+        -- channel and uploads them into graphics memory and puts the uploaded
+        -- texture into the cache.
+        diskToGraphics :: Chan (Maybe (String, DynamicImage)) -> IO ()
+        diskToGraphics chan = do loaded <- readChan chan
+                                 case loaded of
+                                     Just (name, tex) -> do
+                                         tex' <- uploadTexToGraphicsCard tex
+                                         cache <- readIORef tc
+                                         writeIORef tc $ (name, tex'):cache
+                                         diskToGraphics chan
+                                     Nothing  -> return ()
 
 -- | Lets us pass a function "through" a dynamic image, ignoring its type and
 --   getting right down to the raw data.
@@ -100,9 +146,9 @@ noJPEG :: DynamicImage -> DynamicImage
 noJPEG (ImageYCbCr8 img) = ImageRGB8 $ convertImage img
 noJPEG       img         = img
 
--- | Loads a texture from disk into graphics memory, returning Nothing on
+-- | Loads a texture from disk into memory, returning Nothing on
 --   failure.
-loadTexFromDisk :: String -> IO (Maybe Texture)
+loadTexFromDisk :: String -> IO (Maybe DynamicImage)
 loadTexFromDisk name = do name' <- CP.getDataFileName name
                           wrappedTex <- readImage name'
 
@@ -110,8 +156,7 @@ loadTexFromDisk name = do name' <- CP.getDataFileName name
                               Left err  -> do infoM "UI.TextureCache" $
                                                 "Could not load texture '" ++ name ++ "' from '" ++ name' ++ "': " ++ err
                                               return Nothing
-                              Right tex -> do tex' <- uploadTexToGraphicsCard tex
-                                              return $ Just tex'
+                              Right tex -> do return $ Just tex
 
 -- | Uploads a texture from memory into the graphics card.
 uploadTexToGraphicsCard :: DynamicImage -> IO Texture
