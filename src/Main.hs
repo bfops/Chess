@@ -2,11 +2,36 @@ module Main (main) where
 
 import Chess()
 import Config
-import System.Log.Logger
+import Data.List
+import System.IO (stderr)
+import System.Log.Formatter
+import System.Log.Handler as H
+import System.Log.Handler.Simple
+import System.Log.Logger as L
 import UI.Render
 import UI.TextureCache
 
 import Graphics.UI.GLUT
+
+-- | Initializes all the loggers' states to what was defined in the config file.
+configLogger :: IO ()
+configLogger = do root <- getRootLogger
+
+                  let formatter' = simpleLogFormatter logFormat
+
+                  consoleOutput <- streamHandler stderr logLevel
+
+                  let log' = foldl' (\innerlog f -> f innerlog) root
+                        [ L.setLevel logLevel
+                        , setHandlers $ map (flip H.setFormatter formatter')
+                              [ consoleOutput ]
+                        ]
+
+                  -- Apply the changes to the global logger.
+                  saveGlobalLogger log'
+
+                  -- Set up all our custom logger levels.
+                  mapM_ (\(logName, prio) -> updateGlobalLogger logName $ L.setLevel prio) customLogLevels
 
 display :: Window -> TextureCache -> DisplayCallback
 display w tc = do let rectangle = (rectangleRenderer 10 10 (Color3 1.0 1.0 (1.0 :: GLfloat)))
@@ -40,7 +65,7 @@ myInit w = do currentWindow $= Just w
 -- routines. Register callback function to display graphics. Enter main loop and
 -- process events.
 main :: IO ()
-main = do updateGlobalLogger rootLoggerName (setLevel logLevel)
+main = do configLogger
           _ <- getArgsAndInitialize
           initialDisplayMode $= [ DoubleBuffered, RGBMode ]
           initialWindowSize $= Size 800 600

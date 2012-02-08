@@ -65,8 +65,8 @@ loadTexture (TextureCache tc) name =
 -- | Preloads a list of textures into a texture cache. Invalid textures will be
 --   silently ignored.
 --   
---   This is more efficient than calling @map (loadTexture tc)@ because it will
---   load textures from disk and load textures into graphics memory in parallel.
+--   This is more efficient than calling @mapM_ (loadTexture tc)@ because it will
+--   load textures from disk and load textures into graphics memory concurrently.
 preloadTextures :: TextureCache -> [String] -> IO ()
 preloadTextures (TextureCache tc) texts =
            -- When we've loaded all the textures from disk, Nothing is sent

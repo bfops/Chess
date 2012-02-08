@@ -1,9 +1,17 @@
+-- | All built-in configuration goes here, to ease deployment and debugging.
 module Config ( logLevel
+              , customLogLevels
+              , logFormat
               ) where
 
+import Data.List
+import System.IO (stderr)
 import System.Log.Logger
 
--- | The verbosity of messages output to stderr. Possible values:
+-- | The verbosity of messages output to stderr. This can be overridden for
+--   certain components by using customLogLevels.
+--
+--   Possible values:
 --
 --   * DEBUG
 --   * INFO
@@ -15,3 +23,20 @@ import System.Log.Logger
 --   * EMERGENCY
 logLevel :: Priority
 logLevel = DEBUG
+
+-- | Sets custom priority thresholds for different components. For example, if
+--   UI.Render is being too noisy, just add ("UI.Render", WARNING) to this list.
+customLogLevels :: [(String, Priority)]
+customLogLevels = []
+
+-- | The format string to use while logging.
+--
+--   * $msg - The actual log message
+--   * $loggername - The name of the logger
+--   * $prio - The priority level of the message
+--   * $tid - The thread ID
+--   * $pid - Process ID (Not available on windows)
+--   * $time - The current time
+--   * $utcTime - The current time in UTC Time 
+logFormat :: String
+logFormat = "[$time : $loggername : $prio] $msg"
