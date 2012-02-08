@@ -8,6 +8,7 @@ import System.Log.Formatter
 import System.Log.Handler as H
 import System.Log.Handler.Simple
 import System.Log.Logger as L
+import UI.Colors
 import UI.Render
 import UI.TextureCache
 
@@ -34,10 +35,12 @@ configLogger = do root <- getRootLogger
                   mapM_ (\(logName, prio) -> updateGlobalLogger logName $ L.setLevel prio) customLogLevels
 
 display :: Window -> TextureCache -> DisplayCallback
-display w tc = do let rectangle = (rectangleRenderer 10 10 (Color3 1.0 1.0 (1.0 :: GLfloat)))
-                                 { vAlign = Just (TopAlign $ -10)
-                                 , hAlign = Just (LeftAlign 10)
-                                 }
+display w tc = do let rectangle = (rectangleRenderer 10 10 red)
+                                    { vAlign = Just (TopAlign $ -10)
+                                    , hAlign = Just (LeftAlign 10)
+                                    , rotation = pi/4
+                                    , rotateAround = (5, 5)
+                                    }
 
                   yellowDot <- textureRenderer tc "yellow-dot.png"
 
@@ -54,6 +57,12 @@ myInit w = do currentWindow $= Just w
               Size windowWidth windowHeight <- get windowSize
 
               infoM "Main.myInit" $ "Window dimensions: " ++ show windowWidth ++ "x" ++ show windowHeight
+
+              -- Get some nice-looking graphics goin'!
+              mapM_ (\hnt -> hint hnt $= Nicest) [ PointSmooth
+                                                , LineSmooth
+                                                , PolygonSmooth
+                                                ]
 
               -- initialize viewing values
               matrixMode $= Projection
