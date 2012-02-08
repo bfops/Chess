@@ -23,6 +23,7 @@ import qualified Data.Vector.Storable         as V
 import           Data.Word
 import qualified Graphics.Rendering.OpenGL.GL as GL
 import qualified Paths_Chess                  as CP -- :)
+import           System.FilePath
 import           System.Log.Logger
 
 -- | A handle to our texture in graphics memory.
@@ -126,8 +127,8 @@ noJPEG       img         = img
 -- | Loads a texture from disk into memory, returning Nothing on
 --   failure.
 loadTexFromDisk :: String -> IO (Maybe DynamicImage)
-loadTexFromDisk name = do name' <- CP.getDataFileName name
-                          wrappedTex <- readImage' name'
+loadTexFromDisk name = do name' <- CP.getDataFileName $ "assets" </> name
+                          wrappedTex <- readImage' $ name'
 
                           case wrappedTex of
                               Left err  -> do infoM "UI.TextureCache" $
