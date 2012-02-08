@@ -35,11 +35,12 @@ noTexDims = (100, 100)
 
 renderTexture :: Maybe Texture -> IO ()
 -- If we don't have a texture to render, just draw a 100x100 placeholder box.
-renderTexture Nothing  = renderPrimitive' GL.Lines red [ (0, 0)
-                                                       , (fst noTexDims, 0)
-                                                       , (fst noTexDims, snd noTexDims)
-                                                       , (0, snd noTexDims)
-                                                       ]
+renderTexture Nothing  = renderPrimitive' GL.LineStrip red [ (0, 0)
+                                                           , (fst noTexDims, 0)
+                                                           , (fst noTexDims, snd noTexDims)
+                                                           , (0, snd noTexDims)
+                                                           , (0, 0)
+                                                           ]
 renderTexture (Just tex) = do GL.textureWrapMode GL.Texture2D GL.S $= (GL.Repeated, GL.Repeat)
                               GL.textureWrapMode GL.Texture2D GL.T $= (GL.Repeated, GL.Repeat)
                               GL.textureFilter   GL.Texture2D      $= ((GL.Nearest, Nothing), GL.Nearest)

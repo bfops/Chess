@@ -35,7 +35,7 @@ configLogger = do root <- getRootLogger
 
 display :: Window -> TextureCache -> DisplayCallback
 display w tc = do let rectangle = (rectangleRenderer 10 10 (Color3 1.0 1.0 (1.0 :: GLfloat)))
-                                 { vAlign = Just (TopAlign 10)
+                                 { vAlign = Just (TopAlign $ -10)
                                  , hAlign = Just (LeftAlign 10)
                                  }
 

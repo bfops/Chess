@@ -9,6 +9,7 @@ module UI.TextureCache ( Texture(..)
                        ) where
 
 import           Codec.Picture                as Pic
+import           Codec.PicturePrime           as PicPrime
 import           Codec.Picture.Types          as PicTypes
 import           Control.Concurrent
 import           Control.Monad
@@ -119,7 +120,7 @@ noJPEG       img         = img
 --   failure.
 loadTexFromDisk :: String -> IO (Maybe DynamicImage)
 loadTexFromDisk name = do name' <- CP.getDataFileName name
-                          wrappedTex <- readImage name'
+                          wrappedTex <- readImage' name'
 
                           case wrappedTex of
                               Left err  -> do infoM "UI.TextureCache" $
@@ -203,3 +204,9 @@ pixelFormat (ImageYA8 _)    = GL.LuminanceAlpha
 pixelFormat (ImageRGB8 _)   = GL.RGB
 pixelFormat (ImageRGBA8 _)  = GL.RGBA
 pixelFormat (ImageYCbCr8 _) = GL.YCBCR422
+
+-- TODO: The following wrappers should be removed once the next version of
+--       JuicyPixels is released. I have already submitted a patch to this
+--       effect.
+--
+-- Need deepseq instances for JuicyPixels, along with catching IO exceptions.

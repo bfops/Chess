@@ -30,7 +30,10 @@ Executable Chess
                        hslogger ==1.*,
                        array < 1,
                        vector ==0.9.*,
-                       StateVar ==1.*
+                       StateVar ==1.*,
+                       deepseq ==1.2.*,
+                       bytestring ==0.*,
+                       deepseq-th ==0.1.*
 
 test-suite ChessTests
     type: exitcode-stdio-1.0
