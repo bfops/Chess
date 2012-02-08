@@ -4,8 +4,6 @@ module Config ( logLevel
               , logFormat
               ) where
 
-import Data.List
-import System.IO (stderr)
 import System.Log.Logger
 
 -- | The verbosity of messages output to stderr. This can be overridden for
