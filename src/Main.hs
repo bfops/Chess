@@ -58,11 +58,18 @@ myInit w = do currentWindow $= Just w
 
               infoM "Main.myInit" $ "Window dimensions: " ++ show windowWidth ++ "x" ++ show windowHeight
 
-              -- Get some nice-looking graphics goin'!
-              mapM_ (\hnt -> hint hnt $= Nicest) [ PointSmooth
-                                                , LineSmooth
-                                                , PolygonSmooth
-                                                ]
+              -- Enable antialiasing, and general graphical nicities.
+              lineSmooth $= Enabled
+              pointSmooth $= Enabled
+              polygonSmooth $= Enabled
+              blend $= Enabled
+              blendFunc $= (SrcAlpha, OneMinusSrcAlpha)
+              lineWidth $= 1.5
+
+              mapM_ (\ty -> hint ty $= Nicest) [ PointSmooth
+                                              , LineSmooth
+                                              , PolygonSmooth
+                                              ]
 
               -- initialize viewing values
               matrixMode $= Projection
