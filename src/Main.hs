@@ -21,7 +21,7 @@ configLogger = do root <- getRootLogger
 
                   consoleOutput <- streamHandler stderr logLevel
 
-                  let log' = foldl' (\innerlog f -> f innerlog) root
+                  let log' = foldl' (flip ($)) root
                         [ L.setLevel logLevel
                         , setHandlers $ map (flip H.setFormatter formatter')
                               [ consoleOutput ]
