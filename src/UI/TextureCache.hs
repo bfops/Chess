@@ -62,7 +62,7 @@ loadTexture (TextureCache tc) name =
                                                 return $ Just tex''
 
 -- | Preloads a list of textures into a texture cache. Invalid textures will be
---   warned about, but should not invalidate the texture cache.
+--   silently ignored.
 --   
 --   This is more efficient than calling @map (loadTexture tc)@ because it will
 --   load textures from disk and load textures into graphics memory in parallel.
@@ -79,7 +79,8 @@ preloadTextures (TextureCache tc) texts =
                notCached = (nub . sort $ texts ++ cachedNames) \\ cachedNames
 
            chan <- newChan
-           _ <- forkIO $ mapM_ (diskLoader chan) notCached >> writeChan chan Nothing
+           _ <- forkIO $ mapM_ (diskLoader chan) notCached
+                      >> writeChan chan Nothing
            diskToGraphics chan
     where
         -- Loads a texture 'name' from disk into then given channel.
@@ -118,7 +119,7 @@ loadTexFromDisk name = do name' <- CP.getDataFileName name
                               Left err  -> do infoM "UI.TextureCache" $
                                                 "Could not load texture '" ++ name ++ "' from '" ++ name' ++ "': " ++ err
                                               return Nothing
-                              Right tex -> do return $ Just tex
+                              Right tex -> return $ Just tex
 
 -- | Uploads a texture from memory into the graphics card.
 uploadTexToGraphicsCard :: DynamicImage -> IO Texture
