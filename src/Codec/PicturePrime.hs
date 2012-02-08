@@ -19,9 +19,9 @@ import Prelude hiding (catch)
 import System.IO
 
 instance NFData (Image a) where
-    rnf (Image width height dat) = rnf width   `seq`
-                                   rnf height  `seq`
-                                   V.force dat `seq`
+    rnf (Image width height dat) = rnf width  `seq`
+                                   rnf height `seq`
+                                   dat        `seq`
                                    ()
 
 instance NFData (MutableImage s a) where
