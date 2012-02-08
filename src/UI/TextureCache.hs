@@ -12,6 +12,7 @@ import           Codec.Picture                as Pic
 import           Codec.PicturePrime           as PicPrime
 import           Codec.Picture.Types          as PicTypes
 import           Control.Concurrent
+import           Control.DeepSeq
 import           Control.Monad
 import           Data.IORef
 import           Data.List
@@ -33,6 +34,12 @@ data Texture = Texture { texWidth  :: Int -- ^ Width in pixels.
                        -- | A handle to the texture in graphics memory.
                        , texHandle :: TextureHandle
                        }
+
+instance NFData Texture where
+    rnf (Texture width height hand) = rnf width  `seq`
+                                      rnf height `seq`
+                                      hand       `seq`
+                                      ()
 
 -- | A texture cache is used to keep track of all loaded textures. This prevents
 --   texture duplication in graphics memory, and allows us to clean them all up
