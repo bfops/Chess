@@ -57,7 +57,8 @@ loadTexture (TextureCache tc) name =
                              tex <- loadTexFromDisk name
                              case tex of
                                 Nothing -> return Nothing
-                                Just tex' -> do tex'' <- uploadTexToGraphicsCard tex'
+                                Just tex' -> do [handle] <- GL.genObjectNames 1
+                                                tex'' <- uploadTexToGraphicsCard handle tex'
                                                 writeIORef tc $ (name, tex''):cache
                                                 return $ Just tex''
 
@@ -79,9 +80,13 @@ preloadTextures (TextureCache tc) texts =
                notCached = (nub . sort $ texts ++ cachedNames) \\ cachedNames
 
            chan <- newChan
+
            _ <- forkIO $ mapM_ (diskLoader chan) notCached
                       >> writeChan chan Nothing
-           diskToGraphics chan
+
+           handles <- GL.genObjectNames $ length notCached
+
+           diskToGraphics chan handles
     where
         -- Loads a texture 'name' from disk into then given channel.
         diskLoader :: Chan (Maybe (String, DynamicImage)) -> String -> IO ()
@@ -92,15 +97,16 @@ preloadTextures (TextureCache tc) texts =
         -- Repeatedly (until Nothing is encountered) reads items from the given
         -- channel and uploads them into graphics memory and puts the uploaded
         -- texture into the cache.
-        diskToGraphics :: Chan (Maybe (String, DynamicImage)) -> IO ()
-        diskToGraphics chan = do loaded <- readChan chan
-                                 case loaded of
-                                     Just (name, tex) -> do
-                                         tex' <- uploadTexToGraphicsCard tex
-                                         cache <- readIORef tc
-                                         writeIORef tc $ (name, tex'):cache
-                                         diskToGraphics chan
-                                     Nothing  -> return ()
+        diskToGraphics :: Chan (Maybe (String, DynamicImage)) -> [TextureHandle] -> IO ()
+        diskToGraphics _        []      = error "Not enough texture handles."
+        diskToGraphics chan (handle:xs) = do loaded <- readChan chan
+                                             case loaded of
+                                                Just (name, tex) -> do
+                                                    tex' <- uploadTexToGraphicsCard handle tex
+                                                    cache <- readIORef tc
+                                                    writeIORef tc $ (name, tex'):cache
+                                                    diskToGraphics chan xs
+                                                Nothing  -> return ()
 
 -- | OpenGL can't handle the JPEG color space without extensions, so just do it
 --   in software if we every encounter it. Hopefully, this won't happen too
@@ -122,32 +128,31 @@ loadTexFromDisk name = do name' <- CP.getDataFileName name
                               Right tex -> return $ Just tex
 
 -- | Uploads a texture from memory into the graphics card.
-uploadTexToGraphicsCard :: DynamicImage -> IO Texture
-uploadTexToGraphicsCard tex = do let tex'        = noJPEG tex -- OpenGL can't handle YCrCb8.
-                                     width       = imageWidth' tex'
-                                     height      = imageHeight' tex'
-                                     idata       = imageData' tex'
-                                     intFmt      = internalPixelFormat tex'
-                                     fmt         = pixelFormat tex'
+uploadTexToGraphicsCard :: TextureHandle -> DynamicImage -> IO Texture
+uploadTexToGraphicsCard handle tex = do let tex'        = noJPEG tex -- OpenGL can't handle YCrCb8.
+                                            width       = imageWidth' tex'
+                                            height      = imageHeight' tex'
+                                            idata       = imageData' tex'
+                                            intFmt      = internalPixelFormat tex'
+                                            fmt         = pixelFormat tex'
 
-                                 [handle] <- GL.genObjectNames 1
-                                 GL.textureBinding GL.Texture2D $= Just handle
+                                        GL.textureBinding GL.Texture2D $= Just handle
 
-                                 V.unsafeWith idata $ \ptr ->
-                                    GL.texImage2D Nothing
-                                                  GL.NoProxy
-                                                  0
-                                                  intFmt
-                                                  (GL.TextureSize2D
-                                                    (fromIntegral width)
-                                                    (fromIntegral height))
-                                                  0
-                                                  $ GL.PixelData fmt GL.UnsignedByte ptr
+                                        V.unsafeWith idata $ \ptr ->
+                                            GL.texImage2D Nothing
+                                                        GL.NoProxy
+                                                        0
+                                                        intFmt
+                                                        (GL.TextureSize2D
+                                                            (fromIntegral width)
+                                                            (fromIntegral height))
+                                                        0
+                                                        $ GL.PixelData fmt GL.UnsignedByte ptr
 
-                                 return $ Texture { texWidth = width
-                                                  , texHeight = height
-                                                  , texHandle = handle
-                                                  }
+                                        return $ Texture { texWidth = width
+                                                        , texHeight = height
+                                                        , texHandle = handle
+                                                        }
 
 -- | Empties the texture cache, deleting all cached textures from graphics
 --   memory. Do not add textures to multiple caches and then call clear on one
