@@ -11,6 +11,7 @@ module UI.TextureCache ( Texture(..)
 import           Codec.Picture                as Pic
 import           Codec.PicturePrime           as PicPrime
 import           Codec.Picture.Types          as PicTypes
+import           Control.Applicative
 import           Control.Concurrent
 import           Control.DeepSeq
 import           Control.Monad
@@ -48,8 +49,7 @@ newtype TextureCache = TextureCache (IORef [(String, Texture)])
 
 -- | Creates a new, empty texture cache. To begin using it, just call 'loadTexture'!
 newTextureCache :: IO TextureCache
-newTextureCache = do r <- newIORef []
-                     return $ TextureCache r
+newTextureCache = TextureCache <$> newIORef []
 
 -- | Loads a texture, either from disk or the cache. Obviously, the cache will
 --   be preferred. If this function returns Nothing, the image could not be
