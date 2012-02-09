@@ -23,4 +23,13 @@ black = Color3 0.0 0.0 0.0
 --   > green `withAlpha` 1.0 -- Opaque green. In this case,
 --   >                       -- withAlpha was unnecessary.
 withAlpha :: Color3 a -> a -> Color4 a
-withAlpha (Color3 r g b) a = Color4 r g b a
+withAlpha (Color3 r g b) = Color4 r g b
+
+-- | Turns our double-specified color values into whatever stupid format OpenGL
+--   thinks up next... assuming its an instance of Fractional.
+clampify :: Fractional x => Color4 GLdouble -> Color4 x
+clampify (Color4 a b c d) = Color4 (r2f a)
+                                   (r2f b)
+                                   (r2f c)
+                                   (r2f d)
+    where r2f = realToFrac

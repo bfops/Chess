@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes, TupleSections #-}
 module UI.TextureCache ( Texture(..)
                        , TextureCache
                        , TextureHandle
@@ -13,12 +13,16 @@ import           Codec.PicturePrime           as PicPrime
 import           Codec.Picture.Types          as PicTypes
 import           Control.Applicative
 import           Control.Concurrent
+import           Control.Concurrent.STM
 import           Control.DeepSeq
 import           Control.Monad
+import           Control.Monad.IO.Class ( liftIO )
+import           Data.Conduit                 as Cond
+import qualified Data.Conduit.List            as C
+import           Data.Conduit.TMChan
 import           Data.IORef
 import           Data.List
 import           Data.Maybe
-import           Data.StateVar
 import qualified Data.Vector.Storable         as V
 import           Data.Word
 import qualified Graphics.Rendering.OpenGL.GL as GL
@@ -71,6 +75,18 @@ loadTexture (TextureCache tc) name =
                                                 writeIORef tc $ (name, tex''):cache
                                                 return $ Just tex''
 
+-- | Temporary, should be able to be removed with the next version of conduit.
+--   Patch pending.
+conduitZip :: Monad m => [b] -> Conduit a m (a, b)
+conduitZip   []   = Conduit emptyPush close
+    where
+        emptyPush x = return $ Finished (Just x) []
+        close = return []
+conduitZip (y:ys) = Conduit push close
+    where
+        push x = return $ Producing (conduitZip ys) [(x, y)]
+        close  = return []
+
 -- | Preloads a list of textures into a texture cache. Invalid textures will be
 --   silently ignored.
 --   
@@ -78,44 +94,49 @@ loadTexture (TextureCache tc) name =
 --   load textures from disk and load textures into graphics memory concurrently.
 preloadTextures :: TextureCache -> [String] -> IO ()
 preloadTextures (TextureCache tc) texts =
-           -- When we've loaded all the textures from disk, Nothing is sent
-           -- down the channel. This indicates that we're all done.
         do cache <- readIORef tc
 
            -- We only load uncached items. We detect these by getting all unique
            -- names, in the new cache, then removing duplicates, and those that
            -- appeared in the old cache.
            let cachedNames = map fst cache
-               notCached = (nub . sort $ texts ++ cachedNames) \\ cachedNames
+               notCached   = (nub . sort $ texts ++ cachedNames) \\ cachedNames
 
-           chan <- newChan
+           chan <- atomically newTMChan
 
-           _ <- forkIO $ mapM_ (diskLoader chan) notCached
-                      >> writeChan chan Nothing
+           -- Load all textures from disk in a new thread.
+           _ <- forkIO . runResourceT $ C.sourceList notCached Cond.$= diskLoaderConduit $$ sinkTMChan chan
 
+           -- Get valid handles for all our to-be-loaded textures.
            handles <- GL.genObjectNames $ length notCached
 
-           diskToGraphics chan handles
+           -- Grab the disk textures one-by-one and throw it into graphics mem.
+           -- Note that we have to run diskToGraphics in _this_ thread, because
+           -- OpenGL is very single-threaded.
+           runResourceT $ sourceTMChan chan Cond.$= conduitZip handles Cond.$$ toGraphicsMem
     where
-        -- Loads a texture 'name' from disk into then given channel.
-        diskLoader :: Chan (Maybe (String, DynamicImage)) -> String -> IO ()
-        diskLoader chan name = do tex <- loadTexFromDisk name
-                                  when (isJust tex)
-                                    . writeChan chan $ Just (name, fromJust tex)
+        -- Dumps the images in the conduit into graphics memory, caching all
+        -- the handles as we go along.
+        toGraphicsMem :: Sink (Maybe (String, DynamicImage), TextureHandle) IO ()
+        toGraphicsMem = sink []
+            where
+                -- toFree is a list of textures we need to free.
+                sink toFree = SinkData (push toFree) (close toFree)
+                -- Texture loaded from disk. Dump into graphics mem and the cache.
+                push toFree (Just (name, tex), handle) = do tex' <- liftIO $ uploadTexToGraphicsCard handle tex
+                                                            cache <- liftIO $ readIORef tc
+                                                            liftIO . writeIORef tc $ (name, tex'):cache
+                                                            return $ Processing (push toFree) (close toFree)
+                push toFree (Nothing, handle) = let toFree' = handle:toFree
+                                                 in return $ Processing (push toFree') (close toFree')
+                close toFree = liftIO $ GL.deleteObjectNames toFree
 
-        -- Repeatedly (until Nothing is encountered) reads items from the given
-        -- channel and uploads them into graphics memory and puts the uploaded
-        -- texture into the cache.
-        diskToGraphics :: Chan (Maybe (String, DynamicImage)) -> [TextureHandle] -> IO ()
-        diskToGraphics _        []      = error "Not enough texture handles."
-        diskToGraphics chan (handle:xs) = do loaded <- readChan chan
-                                             case loaded of
-                                                Just (name, tex) -> do
-                                                    tex' <- uploadTexToGraphicsCard handle tex
-                                                    cache <- readIORef tc
-                                                    writeIORef tc $ (name, tex'):cache
-                                                    diskToGraphics chan xs
-                                                Nothing  -> return ()
+-- Converts texture names into loaded textures, zipped with their
+-- original name.
+diskLoaderConduit :: Conduit String IO (Maybe (String, DynamicImage))
+diskLoaderConduit = C.mapM (\name -> (name,) <$> loadTexFromDisk name) -- Load the textures, keep the name.
+                  -- Replace the (String, Maybe ..) with Maybe (String, ...)
+                 =$= C.map (\(name, tex) -> (name,) <$> tex)
 
 -- | OpenGL can't handle the JPEG color space without extensions, so just do it
 --   in software if we every encounter it. Hopefully, this won't happen too
@@ -128,7 +149,7 @@ noJPEG       img         = img
 --   failure.
 loadTexFromDisk :: String -> IO (Maybe DynamicImage)
 loadTexFromDisk name = do name' <- CP.getDataFileName $ "assets" </> name
-                          wrappedTex <- readImage' $ name'
+                          wrappedTex <- readImage' name'
 
                           case wrappedTex of
                               Left err  -> do infoM "UI.TextureCache" $
@@ -145,7 +166,7 @@ uploadTexToGraphicsCard handle tex = do let tex'        = noJPEG tex -- OpenGL c
                                             intFmt      = internalPixelFormat tex'
                                             fmt         = pixelFormat tex'
 
-                                        GL.textureBinding GL.Texture2D $= Just handle
+                                        GL.textureBinding GL.Texture2D GL.$= Just handle
 
                                         V.unsafeWith idata $ \ptr ->
                                             GL.texImage2D Nothing
@@ -158,10 +179,10 @@ uploadTexToGraphicsCard handle tex = do let tex'        = noJPEG tex -- OpenGL c
                                                         0
                                                         $ GL.PixelData fmt GL.UnsignedByte ptr
 
-                                        return $ Texture { texWidth = width
-                                                        , texHeight = height
-                                                        , texHandle = handle
-                                                        }
+                                        return Texture { texWidth = width
+                                                       , texHeight = height
+                                                       , texHandle = handle
+                                                       }
 
 -- | Empties the texture cache, deleting all cached textures from graphics
 --   memory. Do not add textures to multiple caches and then call clear on one

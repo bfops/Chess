@@ -24,7 +24,7 @@ configLogger = do root <- getRootLogger
 
                   let log' = foldl' (flip ($)) root
                         [ L.setLevel logLevel
-                        , setHandlers $ map (flip H.setFormatter formatter')
+                        , setHandlers $ map (`H.setFormatter` formatter')
                               [ consoleOutput ]
                         ]
 
@@ -49,32 +49,36 @@ display w tc = do let rectangle = (rectangleRenderer 10 10 red)
                                              , children = [rectangle]
                                              }
 
-myInit :: Window -> IO ()
-myInit w = do currentWindow $= Just w
-              -- select clearing color
-              clearColor $= Color4 0 0 0 0
+myInit :: Window -> TextureCache -> IO ()
+myInit w tc = do currentWindow $= Just w
 
-              Size windowWidth windowHeight <- get windowSize
+                 -- select clearing color
+                 clearColor $= clampify (white `withAlpha` 1)
 
-              infoM "Main.myInit" $ "Window dimensions: " ++ show windowWidth ++ "x" ++ show windowHeight
+                 Size windowWidth windowHeight <- get windowSize
 
-              -- Enable antialiasing, and general graphical nicities.
-              lineSmooth $= Enabled
-              pointSmooth $= Enabled
-              polygonSmooth $= Enabled
-              blend $= Enabled
-              blendFunc $= (SrcAlpha, OneMinusSrcAlpha)
-              lineWidth $= 1.5
+                 infoM "Main.myInit" $ "Window dimensions: " ++ show windowWidth ++ "x" ++ show windowHeight
 
-              mapM_ (\ty -> hint ty $= Nicest) [ PointSmooth
-                                              , LineSmooth
-                                              , PolygonSmooth
-                                              ]
+                 -- Enable antialiasing, and general graphical nicities.
+                 lineSmooth $= Enabled
+                 pointSmooth $= Enabled
+                 polygonSmooth $= Enabled
+                 blend $= Enabled
+                 blendFunc $= (SrcAlpha, OneMinusSrcAlpha)
+                 lineWidth $= 1.5
 
-              -- initialize viewing values
-              matrixMode $= Projection
-              loadIdentity
-              ortho2D 0 (fromIntegral windowWidth) 0 (fromIntegral windowHeight)
+                 mapM_ (\ty -> hint ty $= Nicest) [ PointSmooth
+                                                 , LineSmooth
+                                                 , PolygonSmooth
+                                                 ]
+
+                 -- initialize viewing values
+                 matrixMode $= Projection
+                 loadIdentity
+                 ortho2D 0 (fromIntegral windowWidth) 0 (fromIntegral windowHeight)
+
+                 -- preload our texture cache.
+                 preloadTextures tc [ "yellow-dot.png" ]
 
 -- Declare initial window size, position, and display mode (single buffer and
 -- RGBA). Open window with "hello" in its title bar. Call initialization
@@ -88,6 +92,6 @@ main = do configLogger
           initialWindowPosition $= Position 0 0
           w <- createWindow "hello, world!"
           tc <- newTextureCache
-          myInit w
+          myInit w tc
           displayCallback $= display w tc
           mainLoop

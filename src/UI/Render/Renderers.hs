@@ -37,7 +37,7 @@ renderTexture :: Maybe Texture -> IO ()
 -- If we don't have a texture to render, just draw a 100x100 placeholder box.
 renderTexture Nothing  = renderPrimitive' GL.LineStrip red [ (0, 0)
                                                            , (fst noTexDims, 0)
-                                                           , (fst noTexDims, snd noTexDims)
+                                                           , noTexDims
                                                            , (0, snd noTexDims)
                                                            , (0, 0)
                                                            ]
