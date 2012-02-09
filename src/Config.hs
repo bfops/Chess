@@ -2,6 +2,7 @@
 module Config ( logLevel
               , customLogLevels
               , logFormat
+              , texturePrefix
               ) where
 
 import System.Log.Logger
@@ -38,3 +39,7 @@ customLogLevels = []
 --   * $utcTime - The current time in UTC Time 
 logFormat :: String
 logFormat = "[$time : $loggername : $prio] $msg"
+
+-- | The location of textures - relative to the root of the data directory.
+texturePrefix :: FilePath
+texturePrefix = "assets"

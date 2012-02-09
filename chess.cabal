@@ -19,7 +19,7 @@ Executable Chess
 
     Build-Depends:     base ==4.*,
                        transformers ==0.2.*,
-                       filepath ==1.3.*,
+                       filepath ==1.2.*,
                        stm ==2.*,
                        aeson ==0.*,
                        conduit ==0.2.*,

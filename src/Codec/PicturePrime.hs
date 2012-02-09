@@ -14,7 +14,6 @@ import Control.DeepSeq
 import Control.DeepSeq.TH
 import Control.Exception
 import qualified Data.ByteString as B
-import qualified Data.Vector.Storable as V
 import Prelude hiding (catch)
 import System.IO
 
