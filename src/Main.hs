@@ -3,6 +3,8 @@ module Main (main) where
 import Chess()
 import Config
 import Data.List
+import Data.Maybe
+import qualified Graphics.Rendering.OpenGL.Monad as GL
 import System.IO (stderr)
 import System.Log.Formatter
 import System.Log.Handler as H
@@ -34,20 +36,27 @@ configLogger = do root <- getRootLogger
                   -- Set up all our custom logger levels.
                   mapM_ (\(logName, prio) -> updateGlobalLogger logName $ L.setLevel prio) customLogLevels
 
-display :: Window -> TextureCache -> DisplayCallback
-display w tc = do let rectangle = (rectangleRenderer 10 10 red)
+data GameState = GameState { textures :: [(String, Texture)]
+                           , cache :: TextureCache
+                           }
+
+display :: GameState -> DisplayCallback
+display gs = do let rectangle = (rectangleRenderer 10 10 red)
                                     { vAlign = Just (TopAlign $ -10)
                                     , hAlign = Just (LeftAlign 10)
                                     , rotation = pi/4
                                     , rotateAround = (5, 5)
                                     }
 
-                  yellowDot <- textureRenderer tc "yellow-dot.png"
+                    yellowDot = textureRenderer . fromJust . lookup "yellow-dot.png" $ textures gs
 
-                  updateWindow w $ yellowDot { vAlign = Just (VCenterAlign 0)
-                                             , hAlign = Just (HCenterAlign 0)
-                                             , children = [rectangle]
-                                             }
+                (Size x y) <- get windowSize
+
+                GL.runGraphics . updateWindow (fromIntegral x, fromIntegral y)
+                    $ yellowDot { vAlign = Just (VCenterAlign 0)
+                                , hAlign = Just (HCenterAlign 0)
+                                , children = [rectangle]
+                                }
 
 myInit :: Window -> TextureCache -> IO ()
 myInit w tc = do currentWindow $= Just w
@@ -93,5 +102,8 @@ main = do configLogger
           w <- createWindow "hello, world!"
           tc <- newTextureCache
           myInit w tc
-          displayCallback $= display w tc
+          tex <- loadTexture tc "yellow-dot.png"
+          displayCallback $= display GameState { textures = [("yellow-dot.png", fromJust tex)]
+                                               , cache = tc
+                                               }
           mainLoop

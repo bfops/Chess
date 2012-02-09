@@ -4,70 +4,57 @@ module UI.Render.Renderers ( rectangleRenderer
                            , textRenderer
                            ) where
 
-import qualified Graphics.Rendering.OpenGL.GL as GL
-import Graphics.UI.GLUT as GLUT
-import UI.Colors
-import UI.TextureCache
+import Graphics.Rendering.OpenGL.Monad as GL
+import UI.Texture
 import UI.Render.Core
 
 -- | Sends the draw command for one vertex. Meant to be used in renderPrimitive
 --   and its ilk.
-vertex' :: Int -> Int -> IO ()
+vertex' :: Int -> Int -> GL ()
 vertex' x y = GL.vertex $ (GL.Vertex2 :: GLdouble
                                       -> GLdouble
-                                      -> GL.Vertex2 GLUT.GLdouble)
+                                      -> GL.Vertex2 GLdouble)
                               (fromIntegral x)
                               (fromIntegral y)
 
 -- | Just like 'vertex', except for a texture coordinate.
 --
 --   See: 'vertex'
-texCoord' :: Int -> Int -> IO ()
+texCoord' :: Int -> Int -> GL ()
 texCoord' x y = GL.texCoord $ (GL.TexCoord2 :: GLdouble
                                             -> GLdouble
                                             -> GL.TexCoord2 GLdouble)
                                   (fromIntegral x)
                                   (fromIntegral y)
 
--- | The width and height of the "no texture" box.
-noTexDims :: Dimensions
-noTexDims = (100, 100)
+renderTexture :: Texture -> GL ()
+renderTexture tex = do GL.textureWrapMode GL.Texture2D GL.S $= (GL.Repeated, GL.Repeat)
+                       GL.textureWrapMode GL.Texture2D GL.T $= (GL.Repeated, GL.Repeat)
+                       GL.textureFilter   GL.Texture2D      $= ((GL.Nearest, Nothing), GL.Nearest)
+                       -- Do nearest neighbor interpolation.
 
-renderTexture :: Maybe Texture -> IO ()
--- If we don't have a texture to render, just draw a 100x100 placeholder box.
-renderTexture Nothing  = renderPrimitive' GL.LineStrip red [ (0, 0)
-                                                           , (fst noTexDims, 0)
-                                                           , noTexDims
-                                                           , (0, snd noTexDims)
-                                                           , (0, 0)
-                                                           ]
-renderTexture (Just tex) = do GL.textureWrapMode GL.Texture2D GL.S $= (GL.Repeated, GL.Repeat)
-                              GL.textureWrapMode GL.Texture2D GL.T $= (GL.Repeated, GL.Repeat)
-                              GL.textureFilter   GL.Texture2D      $= ((GL.Nearest, Nothing), GL.Nearest)
-                              -- Do nearest neighbor interpolation.
+                       -- Enable texturing.
+                       GL.texture GL.Texture2D $= GL.Enabled
+                       GL.textureFunction      $= GL.Combine
 
-                              -- Enable texturing.
-                              GL.texture GL.Texture2D $= GL.Enabled
-                              GL.textureFunction      $= GL.Combine
+                       -- Set current texture.
+                       GL.textureBinding GL.Texture2D $= Just (texHandle tex)
 
-                              -- Set current texture.
-                              GL.textureBinding GL.Texture2D $= Just (texHandle tex)
+                       -- Blam! Draw that textured square. We must move clockwise
+                       -- from the top left of the image, so sayeth OpenGL.
+                       GL.renderPrimitive GL.Polygon $ do texCoord' 0 0; vertex' left top;
+                                                          texCoord' 1 0; vertex' right top;
+                                                          texCoord' 1 1; vertex' right bottom;
+                                                          texCoord' 0 1; vertex' left bottom;
 
-                              -- Blam! Draw that textured square. We must move clockwise
-                              -- from the top left of the image, so sayeth OpenGL.
-                              GL.renderPrimitive GL.Polygon $ do texCoord' 0 0; vertex' left top;
-                                                                 texCoord' 1 0; vertex' right top;
-                                                                 texCoord' 1 1; vertex' right bottom;
-                                                                 texCoord' 0 1; vertex' left bottom;
-
-                              GL.texture GL.Texture2D $= GL.Disabled
+                       GL.texture GL.Texture2D $= GL.Disabled
     where
         left = 0
         right = texWidth tex
         top = texHeight tex
         bottom = 0
 
-renderText :: String -> String -> IO ()
+renderText :: String -> String -> GL ()
 renderText _ _ = undefined
 
 -- | Loads a texture, and returns a new renderer for it. NOTE: This function is
@@ -80,15 +67,10 @@ renderText _ _ = undefined
 --   >                          , hAlign = HCenterAlign 0
 --   >                          , children = getCoinChildren
 --   >                          }
-textureRenderer :: TextureCache -> String -> IO Renderer
-textureRenderer tc name = do tex <- loadTexture tc name
-                             return $ defaultRenderer { render = renderTexture tex
-                                                      , dims   = dims' tex
-                                                      }
-    where
-        dims' tex = case tex of
-                        Just tex' -> (texWidth tex', texHeight tex')
-                        Nothing   -> noTexDims
+textureRenderer :: Texture -> Renderer
+textureRenderer tex = defaultRenderer { render = renderTexture tex
+                                      , dims = (texWidth tex, texHeight tex)
+                                      }
 
 textRenderer :: String -- ^ The name of the font we will use for rendering.
              -> String -- ^ The string we're drawing.
@@ -103,7 +85,7 @@ renderPrimitive' :: GL.Color a
                  -> [(Int, Int)]  -- ^ A list of the primitive's verticies, in
                                  --   order (preferably clockwise). The tuple is
                                  --   (x, y).
-                 -> IO ()
+                 -> GL ()
 renderPrimitive' primTy col verts = do GL.color col
                                        GL.renderPrimitive primTy $ mapM_ (uncurry vertex') verts
 

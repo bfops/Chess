@@ -27,6 +27,7 @@ Executable Chess
                        stm-conduit ==0.2.*,
                        zlib ==0.5.3.1,
                        zlib-conduit ==0.2.*,
+                       OpenGLRaw ==1.1.*,
                        OpenGL ==2.4.*,
                        GLUT ==2.*,
                        JuicyPixels ==1.1,

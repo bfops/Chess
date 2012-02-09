@@ -14,7 +14,7 @@ module UI.Render.Core ( Renderer(..)
                       ) where
 
 import Control.Monad
-import Graphics.UI.GLUT
+import Graphics.Rendering.OpenGL.Monad
 
 -- | Used for specifying the nudge factors during alignment.
 --   These values, along with anything else in this library,
@@ -57,7 +57,7 @@ type Dimensions = (Int, Int)
 --   >                        , pos = (10, 4)
 --   >                        , dims = (50, 50)
 --   >                        }
-data Renderer = Renderer { render :: IO () -- ^ Draws the object onto the screen. You
+data Renderer = Renderer { render :: GL () -- ^ Draws the object onto the screen. You
                                           --   don't have to worry about positioning,
                                           --   as this is automatically handled using
                                           --   the 'pos' field.
@@ -139,16 +139,17 @@ rad2deg :: Double -> Double
 rad2deg rad = rad * 180 / pi
 {-# INLINE rad2deg #-}
 
--- | Draws the given renderer, and all its children to the provided window.
+-- | Draws the given renderer, and all its children to the current window.
 --   This should be called every frame, for every window on the screen.
-updateWindow :: Window -> Renderer -> IO ()
-updateWindow w rs = do currentWindow $= Just w
-                       Size x y <- get windowSize
-                       clear [ ColorBuffer ]
-                       matrixMode $= Modelview 0
-                       loadIdentity
-                       render' (fromIntegral x, fromIntegral y) rs
-                       swapBuffers
+--
+--   Make sure to pass in the dimensions of the region on which we should draw.
+--   Normally, this will the the `get windowSize` of the current window.
+updateWindow :: Dimensions -> Renderer -> GL ()
+updateWindow rootDims rs = do clear [ ColorBuffer ]
+                              matrixMode $= Modelview 0
+                              loadIdentity
+                              render' rootDims rs
+                              swapBuffers
     where
         render' parentDims r = preservingMatrix $ do
                                let (x, y) = absPos parentDims r
@@ -160,7 +161,7 @@ updateWindow w rs = do currentWindow $= Just w
 -- | To apply a rotation around a point, translate to that point, apply
 --   the rotation, then translate backwards. To visualize this, picture
 --   rotating a sphere in an orbit.
-applyRotation :: Double -> (Int, Int) -> IO ()
+applyRotation :: Double -> (Int, Int) -> GL ()
 applyRotation rads (xrot, yrot) = do translate $ Vector3 (fromIntegral xrot) (fromIntegral yrot) (0 :: GLdouble)
                                      rotate (realToFrac . rad2deg $ rads) $ Vector3 0 0 (-1.0 :: GLdouble)
                                      translate $ Vector3 (fromIntegral $ -xrot) (fromIntegral $ -yrot) (0 :: GLdouble)
