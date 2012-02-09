@@ -17,7 +17,7 @@ module UI.Texture ( TextureHandle
 import           Codec.Picture                as Pic
 import           Codec.PicturePrime           as PicPrime
 import           Codec.Picture.Types          as PicTypes
-import qualified Config                       as Config
+import qualified Config
 import           Control.Applicative
 import           Control.DeepSeq
 import           Control.Monad
@@ -78,7 +78,7 @@ uploadTexture img = (head <$> GL.genObjectNames 1) >>= loadTexture' img
 -- | Upoads multiple textures at once. Slightly more efficient than calling
 --   'loadTexture' repeatedly.
 uploadTextures :: [DynamicImage] -> IO [Texture]
-uploadTextures xs = (GL.genObjectNames $ length xs)
+uploadTextures xs = GL.genObjectNames (length xs)
                  >>= mapM (uncurry loadTexture') . zip xs
 
 -- | Uploads a texture from memory into the graphics card. Internal
@@ -99,8 +99,8 @@ loadTexture' tex handle = do let tex'        = noJPEG tex -- OpenGL can't handle
                                               0
                                               intFmt
                                               (GL.TextureSize2D
-                                              (fromIntegral width)
-                                              (fromIntegral height))
+                                                (fromIntegral width)
+                                                (fromIntegral height))
                                               0
                                               $ GL.PixelData fmt GL.UnsignedByte ptr
 
