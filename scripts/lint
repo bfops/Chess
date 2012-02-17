@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+set -e
+
+# Make sure to run this from the project root!
+hlint src/ test/ --report --hint=Default --hint=Dollar || firefox report.html

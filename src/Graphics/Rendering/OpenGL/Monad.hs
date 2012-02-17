@@ -4,6 +4,7 @@
 --   running in the same thread, and avoiding the interleaving of random IO.
 module Graphics.Rendering.OpenGL.Monad ( GL
                                        , runGraphics
+                                       , liftSTM
                                        , module Graphics.Rendering.OpenGL.Monad.Wrappers
                                        ) where
 

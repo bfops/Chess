@@ -4,4 +4,6 @@ set -e
 
 cabal build
 cabal test
+cabal copy
+scripts/lint
 inst/bin/Chess &

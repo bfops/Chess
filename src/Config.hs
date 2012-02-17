@@ -3,9 +3,12 @@ module Config ( logLevel
               , customLogLevels
               , logFormat
               , texturePrefix
+              , targetFramerate
+              , windowDimensions
               ) where
 
 import System.Log.Logger
+import Util.Defs
 
 -- | The verbosity of messages output to stderr. This can be overridden for
 --   certain components by using customLogLevels.
@@ -43,3 +46,13 @@ logFormat = "[$time : $loggername : $prio] $msg"
 -- | The location of textures - relative to the root of the data directory.
 texturePrefix :: FilePath
 texturePrefix = "assets"
+
+-- | The number of times per second to run the update loop.
+targetFramerate :: Int
+targetFramerate = 120
+
+-- | The (x, y) dimensions of the screen. Eventually, this should be dynamic,
+--   and full screen should be supported. Until then though, we have this
+--   monstrosity.
+windowDimensions :: Dimensions
+windowDimensions = (800, 600)

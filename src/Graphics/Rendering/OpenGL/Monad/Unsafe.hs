@@ -4,13 +4,18 @@
 --
 --   This preserves the sanctity of the GL type, and makes it so we don't ever
 --   go full retard while parallelizing.
+--
+--   Currently, it only makes sense to call 'runGraphics' from the main thread.
+--   Do not do it anywhere else.
 module Graphics.Rendering.OpenGL.Monad.Unsafe ( GL
                                               , runGraphics
+                                              , liftSTM
                                               , unsafeRunOnGraphicsCard
+                                              , unsafeInnerRunGraphics
                                               ) where
 
 import Control.Applicative
-import Control.Monad
+import Control.Concurrent.STM
 
 -- | A wrapper for any actions performed on a graphics card. This allows us to
 --   have a concurrent, yet easily thread-safe main game loop. Thank god for a
@@ -19,9 +24,17 @@ newtype GL a = GL (IO a)
     deriving (Functor, Applicative, Monad)
 
 -- | Runs a set of graphics actions in the IO monad.
+--
+--   This action is thread-safe, and can therefore be used from multiple
+--   threads. Every time we 'runGraphics', every graphical operation within is
+--   atomic with respect to all other graphics being run.
 runGraphics :: GL a -> IO a
 runGraphics (GL x) = x
 {-# INLINE runGraphics #-}
+
+liftSTM :: STM a -> GL a
+liftSTM = unsafeRunOnGraphicsCard . atomically
+{-# INLINE liftSTM #-}
 
 -- | Converts a graphics action in the IO monad into one in the GL monad.
 --
@@ -30,3 +43,25 @@ runGraphics (GL x) = x
 unsafeRunOnGraphicsCard :: IO a -> GL a
 unsafeRunOnGraphicsCard = GL
 {-# INLINE unsafeRunOnGraphicsCard #-}
+
+-- | Runs a computation inside a graphics monad indirectly embedded within
+--   another graphics monad. This is for situations like:
+--
+--   @
+--   UGLY.unsafeRunOnGraphicsCard . V.unsafeWith idata $ UGLY.unsafeInnerRunGraphics . \ptr ->
+--      GL.texImage2D Nothing
+--                    GL.NoProxy
+--                    0
+--                    intFmt
+--                    (GL.TextureSize2D
+--                       (fromIntegral width)
+--                       (fromIntegral height))
+--                    0
+--                    $ GL.PixelData fmt GL.UnsignedByte ptr
+--   @
+--
+--   Since we use an MVar to protect all OpenGL operations, this will prevent
+--   a deadlock with the MVar being taken twice.
+
+unsafeInnerRunGraphics :: GL a -> IO a
+unsafeInnerRunGraphics (GL x) = x

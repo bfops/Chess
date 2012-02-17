@@ -9,12 +9,11 @@ module UI.Render.Core ( Renderer(..)
                       , updateWindow
                       , HAlign(..)
                       , VAlign(..)
-                      , Coord
-                      , Dimensions
                       ) where
 
 import Control.Monad
 import Graphics.Rendering.OpenGL.Monad
+import Util.Defs
 
 -- | Used for specifying the nudge factors during alignment.
 --   These values, along with anything else in this library,
@@ -42,20 +41,12 @@ data VAlign = TopAlign     !Offset
             | BottomAlign  !Offset
             | VCenterAlign !Offset
 
--- | The (x, y) coordinates of a point on the screen, measured from the bottom,
---   left corner.
-type Coord = (Int, Int)
-
--- | If you were to draw an axis-aligned bounding box around an object,
---   Dimensions would represent the (x, y) lengths of the sides.
-type Dimensions = (Int, Int)
-
 -- | A renderable is anything which can be drawn onto the screen.
 --   To build one, use renderer and override the necessary arguments.
 --
 --   > rect = defaultRenderer { draw = drawRectangle
 --   >                        , pos = (10, 4)
---   >                        , dims = (50, 50)
+--   >                        , rendDims = (50, 50)
 --   >                        }
 data Renderer = Renderer { render :: GL () -- ^ Draws the object onto the screen. You
                                           --   don't have to worry about positioning,
@@ -67,7 +58,7 @@ data Renderer = Renderer { render :: GL () -- ^ Draws the object onto the screen
                                        --   to the bottom left corner of the
                                        --   object's parent.
 
-                         , dims :: Dimensions -- ^ The dimensions of the object.
+                         , rendDims :: Dimensions -- ^ The dimensions of the object.
 
                          -- | The coordinates of the point to rotate around,
                          --   relative to the bottom-left of the object.
@@ -98,14 +89,14 @@ data Renderer = Renderer { render :: GL () -- ^ Draws the object onto the screen
 --
 --   > rect = defaultRenderer { draw = (drawRectangle 50 50)
 --   >                        , pos = (10, 4)
---   >                        , dims = (50, 50)
+--   >                        , rendDims = (50, 50)
 --   >                        }
 --   
 --   See: 'Renderer'
 defaultRenderer :: Renderer
 defaultRenderer = Renderer { render = return ()
                            , pos = (0, 0)
-                           , dims = (0, 0)
+                           , rendDims = (0, 0)
                            , rotateAround = (0, 0)
                            , rotation = 0.0
                            , vAlign = Nothing
@@ -132,7 +123,7 @@ absPos parentDims r = let x' = case hAlign r of
                        in (x', y')
     where
         (x, y) = pos r
-        (dx, dy) = dims r
+        (dx, dy) = rendDims r
         (pdx, pdy) = parentDims
 
 rad2deg :: Double -> Double
@@ -156,7 +147,7 @@ updateWindow rootDims rs = do clear [ ColorBuffer ]
                                translate $ Vector3 (fromIntegral x) (fromIntegral y) (0 :: GLdouble)
                                applyRotation (rotation r) (rotateAround r)
                                render r
-                               forM_ (children r) $ render' (dims r)
+                               forM_ (children r) $ render' (rendDims r)
 
 -- | To apply a rotation around a point, translate to that point, apply
 --   the rotation, then translate backwards. To visualize this, picture

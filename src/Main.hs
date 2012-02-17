@@ -3,8 +3,8 @@ module Main (main) where
 import Chess()
 import Config
 import Data.List
-import Data.Maybe
-import qualified Graphics.Rendering.OpenGL.Monad as GL
+import Game.Engine
+import Graphics.Rendering.OpenGL.Monad as GL
 import System.IO (stderr)
 import System.Log.Formatter
 import System.Log.Handler as H
@@ -12,9 +12,7 @@ import System.Log.Handler.Simple
 import System.Log.Logger as L
 import UI.Colors
 import UI.Render
-import UI.TextureCache
-
-import Graphics.UI.GLUT
+import UI.TextureLoader()
 
 -- | Initializes all the loggers' states to what was defined in the config file.
 configLogger :: IO ()
@@ -36,58 +34,27 @@ configLogger = do root <- getRootLogger
                   -- Set up all our custom logger levels.
                   mapM_ (\(logName, prio) -> updateGlobalLogger logName $ L.setLevel prio) customLogLevels
 
-data GameState = GameState { textures :: [(String, Texture)]
-                           , cache :: TextureCache
+data GameState = GameState { renderers :: Renderer
                            }
 
-display :: GameState -> DisplayCallback
-display gs = do let rectangle = (rectangleRenderer 10 10 red)
-                                    { vAlign = Just (TopAlign $ -10)
-                                    , hAlign = Just (LeftAlign 10)
-                                    , rotation = pi/4
-                                    , rotateAround = (5, 5)
-                                    }
+display :: GameState -> Dimensions -> GL ()
+display gs dims = updateWindow dims $ renderers gs
 
-                    yellowDot = textureRenderer . fromJust . lookup "yellow-dot.png" $ textures gs
+-- | We don't do anything... for now.
+update :: GameState -> Double -> IO GameState
+update gs _ = return gs
 
-                (Size x y) <- get windowSize
+-- | Event handling is currently unimplemented.
+onEvent :: GameState -> Event -> GameState
+onEvent gs _ = gs
 
-                GL.runGraphics . updateWindow (fromIntegral x, fromIntegral y)
-                    $ yellowDot { vAlign = Just (VCenterAlign 0)
-                                , hAlign = Just (HCenterAlign 0)
-                                , children = [rectangle]
-                                }
-
-myInit :: Window -> TextureCache -> IO ()
-myInit w tc = do currentWindow $= Just w
-
-                 -- select clearing color
-                 clearColor $= clampify (white `withAlpha` 1)
-
-                 Size windowWidth windowHeight <- get windowSize
-
-                 infoM "Main.myInit" $ "Window dimensions: " ++ show windowWidth ++ "x" ++ show windowHeight
-
-                 -- Enable antialiasing, and general graphical nicities.
-                 lineSmooth $= Enabled
-                 pointSmooth $= Enabled
-                 polygonSmooth $= Enabled
-                 blend $= Enabled
-                 blendFunc $= (SrcAlpha, OneMinusSrcAlpha)
-                 lineWidth $= 1.5
-
-                 mapM_ (\ty -> hint ty $= Nicest) [ PointSmooth
-                                                 , LineSmooth
-                                                 , PolygonSmooth
-                                                 ]
-
-                 -- initialize viewing values
-                 matrixMode $= Projection
-                 loadIdentity
-                 ortho2D 0 (fromIntegral windowWidth) 0 (fromIntegral windowHeight)
-
-                 -- preload our texture cache.
-                 preloadTextures tc [ "yellow-dot.png" ]
+-- | TODO: Textures!?
+initState :: GameState
+initState = GameState $ (rectangleRenderer 200 200 red)
+                            { pos = (200, 200)
+--                            , rotation = pi/4
+--                            , rotateAround = (5, 5)
+                            }
 
 -- Declare initial window size, position, and display mode (single buffer and
 -- RGBA). Open window with "hello" in its title bar. Call initialization
@@ -95,15 +62,4 @@ myInit w tc = do currentWindow $= Just w
 -- process events.
 main :: IO ()
 main = do configLogger
-          _ <- getArgsAndInitialize
-          initialDisplayMode $= [ DoubleBuffered, RGBMode ]
-          initialWindowSize $= Size 800 600
-          initialWindowPosition $= Position 0 0
-          w <- createWindow "hello, world!"
-          tc <- newTextureCache
-          myInit w tc
-          tex <- loadTexture tc "yellow-dot.png"
-          displayCallback $= display GameState { textures = [("yellow-dot.png", fromJust tex)]
-                                               , cache = tc
-                                               }
-          mainLoop
+          runGame "Chess - By B & C" initState display update onEvent

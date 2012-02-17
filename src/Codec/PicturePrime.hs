@@ -1,4 +1,3 @@
-{-# LANGUAGE TemplateHaskell #-}
 -- | This is a temporary auxilary import for JuicyPixels until my patches are
 --   merged into a released version.
 --
@@ -11,7 +10,6 @@ import Codec.Picture hiding ( readImage )
 import Codec.Picture.Types
 import Control.Applicative ( (<$>) )
 import Control.DeepSeq
-import Control.DeepSeq.TH
 import Control.Exception
 import qualified Data.ByteString as B
 import Prelude hiding (catch)
@@ -29,7 +27,12 @@ instance NFData (MutableImage s a) where
                                           dat        `seq`
                                           ()
 
-$(deriveNFData ''DynamicImage)
+instance NFData DynamicImage where
+    rnf (ImageY8 i)      = rnf i
+    rnf (ImageYA8 i)     = rnf i
+    rnf (ImageRGB8 i)    = rnf i
+    rnf (ImageRGBA8 i)  = rnf i
+    rnf (ImageYCbCr8 i) = rnf i
 
 readImage' :: FilePath -> IO (Either String DynamicImage)
 readImage' path = catch doit

@@ -8,52 +8,6 @@ import Graphics.Rendering.OpenGL.Monad as GL
 import UI.Texture
 import UI.Render.Core
 
--- | Sends the draw command for one vertex. Meant to be used in renderPrimitive
---   and its ilk.
-vertex' :: Int -> Int -> GL ()
-vertex' x y = GL.vertex $ (GL.Vertex2 :: GLdouble
-                                      -> GLdouble
-                                      -> GL.Vertex2 GLdouble)
-                              (fromIntegral x)
-                              (fromIntegral y)
-
--- | Just like 'vertex', except for a texture coordinate.
---
---   See: 'vertex'
-texCoord' :: Int -> Int -> GL ()
-texCoord' x y = GL.texCoord $ (GL.TexCoord2 :: GLdouble
-                                            -> GLdouble
-                                            -> GL.TexCoord2 GLdouble)
-                                  (fromIntegral x)
-                                  (fromIntegral y)
-
-renderTexture :: Texture -> GL ()
-renderTexture tex = do GL.textureWrapMode GL.Texture2D GL.S $= (GL.Repeated, GL.Repeat)
-                       GL.textureWrapMode GL.Texture2D GL.T $= (GL.Repeated, GL.Repeat)
-                       GL.textureFilter   GL.Texture2D      $= ((GL.Nearest, Nothing), GL.Nearest)
-                       -- Do nearest neighbor interpolation.
-
-                       -- Enable texturing.
-                       GL.texture GL.Texture2D $= GL.Enabled
-                       GL.textureFunction      $= GL.Combine
-
-                       -- Set current texture.
-                       GL.textureBinding GL.Texture2D $= Just (texHandle tex)
-
-                       -- Blam! Draw that textured square. We must move clockwise
-                       -- from the top left of the image, so sayeth OpenGL.
-                       GL.renderPrimitive GL.Polygon $ do texCoord' 0 0; vertex' left top;
-                                                          texCoord' 1 0; vertex' right top;
-                                                          texCoord' 1 1; vertex' right bottom;
-                                                          texCoord' 0 1; vertex' left bottom;
-
-                       GL.texture GL.Texture2D $= GL.Disabled
-    where
-        left = 0
-        right = texWidth tex
-        top = texHeight tex
-        bottom = 0
-
 renderText :: String -> String -> GL ()
 renderText _ _ = undefined
 
@@ -69,7 +23,7 @@ renderText _ _ = undefined
 --   >                          }
 textureRenderer :: Texture -> Renderer
 textureRenderer tex = defaultRenderer { render = renderTexture tex
-                                      , dims = (texWidth tex, texHeight tex)
+                                      , rendDims = (texWidth tex, texHeight tex)
                                       }
 
 textRenderer :: String -- ^ The name of the font we will use for rendering.
@@ -96,12 +50,12 @@ rectangleRenderer :: GL.Color a
                   -> a    -- ^ The color of the desired rectangle.
                   -> Renderer
 rectangleRenderer width height col =
-    defaultRenderer { render = renderPrimitive' GL.Polygon col [ (left, top)
-                                                               , (right, top)
-                                                               , (right, bottom)
-                                                               , (left, bottom)
-                                                               ]
-                    , dims = (width, height)
+    defaultRenderer { render = renderPrimitive' GL.LineLoop col [ (left, top)
+                                                                , (right, top)
+                                                                , (right, bottom)
+                                                                , (left, bottom)
+                                                                ]
+                    , rendDims = (width, height)
                     }
     where
         top = height

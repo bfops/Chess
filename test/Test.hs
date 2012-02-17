@@ -9,6 +9,8 @@ import Test.HUnit
 
 import Data.List
 
+{-# ANN module "HLint: ignore" #-}
+
 main = defaultMain tests
 
 tests = [

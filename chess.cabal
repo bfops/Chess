@@ -14,30 +14,35 @@ Extra-Source-Files:  assets/*.png
 Executable Chess
     hs-source-dirs:    src/
     Main-is:           Main.hs
-    GHC-Options:       -Wall
+    GHC-Options:       -Wall -threaded -rtsopts=all -funbox-strict-fields -fllvm
+    Extensions:        UnboxedTuples
     Other-Modules:     Paths_Chess
 
-    Build-Depends:     base ==4.*,
+    Build-Depends:     base,
+                       containers ==0.4.*,
                        transformers ==0.2.*,
-                       filepath ==1.2.*,
+                       text ==0.11.*,
                        stm ==2.*,
+                       stm-chans ==1.2.*,
                        aeson ==0.*,
                        conduit ==0.2.*,
                        attoparsec-conduit ==0.2.*,
                        stm-conduit ==0.2.*,
-                       zlib ==0.5.3.1,
-                       zlib-conduit ==0.2.*,
-                       OpenGLRaw ==1.1.*,
-                       OpenGL ==2.4.*,
+                       OpenGLRaw ==1.2.*,
+                       OpenGL ==2.5.*,
                        GLUT ==2.*,
                        JuicyPixels ==1.1,
                        hslogger ==1.*,
                        array < 1,
                        vector ==0.9.*,
                        StateVar ==1.*,
-                       deepseq ==1.2.*,
                        bytestring ==0.*,
-                       deepseq-th ==0.1.*
+                       template-haskell ==2.7.*,
+                       hashable ==1.1.*,
+                       hashmap ==1.3.*,
+                       filepath ==1.3.*,
+                       deepseq ==1.3.*,
+                       time ==1.4.*
 
 test-suite ChessTests
     type: exitcode-stdio-1.0
