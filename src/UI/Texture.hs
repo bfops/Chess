@@ -35,9 +35,9 @@ import           System.Log.Logger
 
 type TextureHandle = GL.TextureObject
 
--- | A metadata wrapper around 'TextureHandle'. Generally, you will pass
---   'Texture' around internally, and use 'TextureHandle' when dealing with
---   OpenGL.
+-- | A metadata wrapper around an OpenGL 'TextureObject'. Generally, you will
+--   pass 'Texture' around internally, and use 'texHandle' when dealing
+--   with OpenGL.
 data Texture = Texture { texWidth  :: !Int -- ^ Width in pixels.
                        , texHeight :: !Int -- ^ Height in pixels.
                        -- | A handle to the texture in graphics memory.

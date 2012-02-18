@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell, OverloadedStrings, BangPatterns #-}
+{-# OPTIONS_GHC -fno-unbox-strict-fields #-}
 -- | A 'HashString' represents a string, annotated with its hash. This allows
 --   us to avoid frequent rehashing.
 --
@@ -11,11 +12,10 @@
 --
 --   > name <- loadNameFromFile "some-text-file"
 --   > fromString name -- Generates the hashString equivalent to whatever was
---                     -- in 'name'.
+--   >                 -- in 'name'.
 --
 --   Use the quasiquoter as much as possible, as it makes the hashing run at
 --   compile time, saving us from having to do _any_ hashing at runtime.
-{-# OPTIONS_GHC -fno-unbox-strict-fields #-}
 module Util.HashString ( -- * Normal Haskell Interface
                          HashString(..)
                        , fromHashString

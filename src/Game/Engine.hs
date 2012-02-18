@@ -13,7 +13,7 @@ import           Control.DeepSeq
 import qualified Data.Foldable as F
 import           Data.Function
 import           Data.Ratio
-import           Data.Sequence ( Seq, (|>), (<|) )
+import           Data.Sequence ( Seq, (|>) )
 import qualified Data.Sequence as Seq
 import           Data.Time.Clock
 import           Data.Time.Clock.POSIX
@@ -92,7 +92,7 @@ runUpdateLoop :: TVar (GameState a)
 runUpdateLoop gs updateT updateE eventQ = getPOSIXTime >>= go
     where
         go :: NominalDiffTime -> IO ()
-        go t1 = do t2 <- waitFor (t1 + realToFrac framePeriod)
+        go t1 = do t2 <- waitFor (t1 + framePeriod)
                    
                    (GameState us _) <- atomically $ readTVar gs
 
@@ -120,8 +120,8 @@ waitFor targetTime = do currentTime <- getPOSIXTime
                                      return currentTime
 
 -- | How long a frame is, in seconds.
-framePeriod :: Ratio Int
-framePeriod = 1 % targetFramerate
+framePeriod :: NominalDiffTime
+framePeriod = realToFrac $ 1 % targetFramerate
 
 -- | Clears the event queue, folding the event function over the current game
 --   state. Returns the new userstate.
