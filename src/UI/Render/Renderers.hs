@@ -50,11 +50,11 @@ rectangleRenderer :: GL.Color a
                   -> a    -- ^ The color of the desired rectangle.
                   -> Renderer
 rectangleRenderer width height col =
-    defaultRenderer { render = renderPrimitive' GL.LineLoop col [ (left, top)
-                                                                , (right, top)
-                                                                , (right, bottom)
-                                                                , (left, bottom)
-                                                                ]
+    defaultRenderer { render = renderPrimitive' GL.Polygon col [ (left, top)
+                                                               , (right, top)
+                                                               , (right, bottom)
+                                                               , (left, bottom)
+                                                               ]
                     , rendDims = (width, height)
                     }
     where

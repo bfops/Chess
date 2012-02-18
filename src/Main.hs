@@ -51,9 +51,10 @@ onEvent gs _ = gs
 -- | TODO: Textures!?
 initState :: GameState
 initState = GameState $ (rectangleRenderer 200 200 red)
-                            { pos = (200, 200)
---                            , rotation = pi/4
---                            , rotateAround = (5, 5)
+                            { hAlign = Just $ HCenterAlign 0
+                            , vAlign = Just $ VCenterAlign 0
+                            , rotation = pi/4
+                            , rotateAround = (100, 100)
                             }
 
 -- Declare initial window size, position, and display mode (single buffer and
