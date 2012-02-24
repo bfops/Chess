@@ -44,8 +44,8 @@ display :: GameState -> Dimensions -> GL ()
 display gs dims = updateWindow dims $ renderers gs
 
 -- | We don't do anything... for now.
-update :: GameState -> Double -> IO GameState
-update gs _ = return gs
+update :: GameState -> Double -> GameState
+update gs _ = gs
 
 -- | Event handling is currently unimplemented.
 onEvent :: GameState -> Event -> GameState

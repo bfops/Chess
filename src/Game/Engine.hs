@@ -53,7 +53,7 @@ runGame :: String
         --   This should do the minimum amount of work possible. All the hard
         --   stuff should be handled in the update function. The 'Dimensions'
         --   parameter is the current resolution of the display. Respect it!
-        -> (gameState -> Double -> IO gameState)
+        -> (gameState -> Double -> gameState)
         -- ^ Updates the game's state, given a current time (in seconds).
         --   All computationally expensive tasks should be done in here.
         -> (gameState -> Event -> gameState)
@@ -79,7 +79,8 @@ runGame title initState rend updateT updateE =
                         keyboardMouseCallback $= Just (onKeyMouse eventQ)
                         motionCallback        $= Just (onMotion eventQ)
 
-       tid <- forkIO $ runUpdateLoop state updateT updateE eventQ
+
+       tid <- forkIO $ runUpdateLoop state ((return.).updateT) updateE eventQ
 
        mainLoop
        killThread tid
