@@ -31,8 +31,11 @@ configLogger = do root <- getRootLogger
                   -- Apply the changes to the global logger.
                   saveGlobalLogger log'
 
+                  let addLogLevel (log, prio) = updateGlobalLogger log $
+                                                    L.setLevel prio
+
                   -- Set up all our custom logger levels.
-                  mapM_ (\(logName, prio) -> updateGlobalLogger logName $ L.setLevel prio) customLogLevels
+                  mapM_ addLogLevel customLogLevels
 
 data GameState = GameState { renderers :: Renderer
                            }
@@ -57,10 +60,8 @@ initState = GameState $ (rectangleRenderer 200 200 red)
                             , rotateAround = (100, 100)
                             }
 
--- Declare initial window size, position, and display mode (single buffer and
--- RGBA). Open window with "hello" in its title bar. Call initialization
--- routines. Register callback function to display graphics. Enter main loop and
--- process events.
+-- Call initialization routines. Register callback function to display
+-- graphics. Enter main loop and process events.
 main :: IO ()
 main = do configLogger
           runGame "Chess - By B & C" initState display update onEvent

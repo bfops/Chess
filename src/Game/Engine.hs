@@ -93,7 +93,7 @@ runUpdateLoop gs updateT updateE eventQ = getPOSIXTime >>= go
     where
         go :: NominalDiffTime -> IO ()
         go t1 = do t2 <- waitFor (t1 + framePeriod)
-                   
+
                    (GameState us _) <- atomically $ readTVar gs
 
                    -- Update! We let the render thread read the old state while
