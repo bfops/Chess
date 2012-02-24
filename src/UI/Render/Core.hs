@@ -32,11 +32,13 @@ import Util.Defs
 type Offset = Int
 
 -- | A type used for specifying horizontal alignment.
+--   each alignment aligns part side of the object with that part of the parent.
 data HAlign = LeftAlign    !Offset
             | RightAlign   !Offset
             | HCenterAlign !Offset
 
 -- | A type used for specifying vertical alignment.
+--   each alignment aligns that part of the object with that part of the parent.
 data VAlign = TopAlign     !Offset
             | BottomAlign  !Offset
             | VCenterAlign !Offset
@@ -49,9 +51,9 @@ data VAlign = TopAlign     !Offset
 --   >                        , rendDims = (50, 50)
 --   >                        }
 data Renderer = Renderer { render :: GL () -- ^ Draws the object onto the screen. You
-                                          --   don't have to worry about positioning,
-                                          --   as this is automatically handled using
-                                          --   the 'pos' field.
+                                           --   don't have to worry about positioning,
+                                           --   as this is automatically handled using
+                                           --   the 'pos' field.
 
                          , pos :: Coord -- ^ The position of the bottom-left
                                        --   corner of the object, relative
@@ -91,7 +93,7 @@ data Renderer = Renderer { render :: GL () -- ^ Draws the object onto the screen
 --   >                        , pos = (10, 4)
 --   >                        , rendDims = (50, 50)
 --   >                        }
---   
+--
 --   See: 'Renderer'
 defaultRenderer :: Renderer
 defaultRenderer = Renderer { render = return ()

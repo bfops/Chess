@@ -69,8 +69,8 @@ runGame title initState rend updateT updateE =
        dims@(width, height) <- runGraphics $ initWindow w
 
        state <- atomically . newTVar $ GameState { userState = initState
-                                                , windowDims = dims
-                                                }
+                                                 , windowDims = dims
+                                                 }
 
        eventQ <- atomically $ newTVar Seq.empty
 

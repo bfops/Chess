@@ -39,7 +39,7 @@ customLogLevels = []
 --   * $tid - The thread ID
 --   * $pid - Process ID (Not available on windows)
 --   * $time - The current time
---   * $utcTime - The current time in UTC Time 
+--   * $utcTime - The current time in UTC Time
 logFormat :: String
 logFormat = "[$time : $loggername : $prio] $msg"
 
