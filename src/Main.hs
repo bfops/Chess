@@ -59,8 +59,6 @@ onEvent gs _ = gs
 initState :: GameState
 initState = GameState $ (rectangleRenderer 200 200 red)
                             { pos = Right (HCenterAlign 0, VCenterAlign 0)
-                            , rotation = pi/4096
-                                      -- ^ Magic hack because 0 doesn't work on my machine.
                             }
 
 -- | Initializes a new window, and returns its dimensions.
@@ -75,7 +73,7 @@ initWindow w = do currentWindow $= Just w
                   polygonSmooth $= Enabled
                   blend $= Enabled
                   blendFunc $= (SrcAlpha, OneMinusSrcAlpha)
-                  lineWidth $= 1
+                  lineWidth $= 2
 
                   mapM_ (\ty -> hint ty $= Nicest) [ PointSmooth
                                                    , LineSmooth
