@@ -78,9 +78,9 @@ initWindow w = do currentWindow $= Just w
                   lineWidth $= 1
 
                   mapM_ (\ty -> hint ty $= Nicest) [ PointSmooth
-                                                  , LineSmooth
-                                                  , PolygonSmooth
-                                                  ]
+                                                   , LineSmooth
+                                                   , PolygonSmooth
+                                                   ]
 
                   return Config.windowDimensions
 
