@@ -11,7 +11,6 @@ import           Control.Concurrent.STM
 import           Control.DeepSeq
 
 import qualified Data.Foldable as F
-import           Data.Function
 import           Data.Ratio
 import           Data.Sequence ( Seq, (|>) )
 import qualified Data.Sequence as Seq
@@ -19,9 +18,7 @@ import           Data.Time.Clock
 import           Data.Time.Clock.POSIX
 
 import           Graphics.Rendering.OpenGL.Monad
-import           Graphics.UI.GLUT ( Window
-                                  , createWindow
-                                  , Key(..)
+import           Graphics.UI.GLUT ( Key(..)
                                   , KeyState(..)
                                   , Modifiers(..)
                                   , Position(..)
@@ -42,10 +39,9 @@ data GameState s = GameState { userState :: s
                              , windowDims :: Dimensions
                              }
 
--- | Starts the main loop of a game. Games will be run full screen and at the
---   maximum possible resolution.
-runGame :: String
-        -- ^ The title of the game window.
+-- | Starts the main loop of a game.
+runGame :: Dimensions
+        -- ^ Dimensions of the window we render to.
         -> gameState
         -- ^ The initial game's state.
         -> (gameState -> Dimensions -> GL ())
@@ -59,16 +55,8 @@ runGame :: String
         -> (gameState -> Event -> gameState)
         -- ^ Updates the game's state given some input by the user.
         -> IO ()
-runGame title initState rend updateT updateE =
-    do runGraphics $ getArgsAndInitialize
-                   >> initialDisplayMode $= [ DoubleBuffered
-                                           , RGBAMode
-                                           , WithSamplesPerPixel 2
-                                           ]
-       w <- createWindow title
-       dims@(width, height) <- runGraphics $ initWindow w
-
-       state <- atomically . newTVar $ GameState { userState = initState
+runGame dims initState rend updateT updateE =
+    do state <- atomically . newTVar $ GameState { userState = initState
                                                  , windowDims = dims
                                                  }
 
@@ -78,7 +66,6 @@ runGame title initState rend updateT updateE =
                         reshapeCallback       $= Just (reshape state)
                         keyboardMouseCallback $= Just (onKeyMouse eventQ)
                         motionCallback        $= Just (onMotion eventQ)
-
 
        tid <- forkIO $ runUpdateLoop state ((return.).updateT) updateE eventQ
 
@@ -173,24 +160,3 @@ onKeyMouse updateE key keyState mods pos = return ()
 onMotion :: TVar (Seq.Seq Event)
          -> Position -> IO ()
 onMotion updateE pos = return ()
-
--- | Initializes a new window, and returns its dimensions.
-initWindow :: Window -> GL Dimensions
-initWindow w = do currentWindow $= Just w
-
-                  windowSize $= uncurry (Size `on` fromIntegral) windowDimensions
-
-                  -- Enable antialiasing, and general graphical nicities.
-                  lineSmooth $= Enabled
-                  pointSmooth $= Enabled
-                  polygonSmooth $= Enabled
-                  blend $= Enabled
-                  blendFunc $= (SrcAlpha, OneMinusSrcAlpha)
-                  lineWidth $= 1
-
-                  mapM_ (\ty -> hint ty $= Nicest) [ PointSmooth
-                                                  , LineSmooth
-                                                  , PolygonSmooth
-                                                  ]
-
-                  return windowDimensions

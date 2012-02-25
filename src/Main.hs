@@ -2,9 +2,13 @@ module Main (main) where
 
 import Chess()
 import Config
+import Data.Function
 import Data.List
 import Game.Engine
 import Graphics.Rendering.OpenGL.Monad as GL
+import Graphics.UI.GLUT ( Window
+                        , createWindow
+                        )
 import System.IO (stderr)
 import System.Log.Formatter
 import System.Log.Handler as H
@@ -54,14 +58,42 @@ onEvent gs _ = gs
 -- | TODO: Textures!?
 initState :: GameState
 initState = GameState $ (rectangleRenderer 200 200 red)
-                            { hAlign = Just $ HCenterAlign 0
-                            , vAlign = Just $ VCenterAlign 0
-                            , rotation = pi/4
-                            , rotateAround = (100, 100)
+                            { pos = Right (HCenterAlign 0, VCenterAlign 0)
+                            , rotation = pi/4096
+                                      -- ^ Magic hack because 0 doesn't work on my machine.
                             }
+
+-- | Initializes a new window, and returns its dimensions.
+initWindow :: Window -> GL Dimensions
+initWindow w = do currentWindow $= Just w
+
+                  windowSize $= uncurry (Size `on` fromIntegral) Config.windowDimensions
+
+                  -- Enable antialiasing, and general graphical nicities.
+                  lineSmooth $= Enabled
+                  pointSmooth $= Enabled
+                  polygonSmooth $= Enabled
+                  blend $= Enabled
+                  blendFunc $= (SrcAlpha, OneMinusSrcAlpha)
+                  lineWidth $= 1
+
+                  mapM_ (\ty -> hint ty $= Nicest) [ PointSmooth
+                                                  , LineSmooth
+                                                  , PolygonSmooth
+                                                  ]
+
+                  return Config.windowDimensions
+
 
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.
 main :: IO ()
 main = do configLogger
-          runGame "Chess - By B & C" initState display update onEvent
+          runGraphics $ getArgsAndInitialize
+                      >> initialDisplayMode $= [ DoubleBuffered
+                                               , RGBAMode
+                                               , WithSamplesPerPixel 2
+                                               ]
+
+          dims <- runGraphics . initWindow =<< createWindow "Chess - By B & C"
+          runGame dims initState display update onEvent

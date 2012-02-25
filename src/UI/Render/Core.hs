@@ -55,30 +55,24 @@ data Renderer = Renderer { render :: GL () -- ^ Draws the object onto the screen
                                            --   as this is automatically handled using
                                            --   the 'pos' field.
 
-                         , pos :: Coord -- ^ The position of the bottom-left
-                                       --   corner of the object, relative
-                                       --   to the bottom left corner of the
-                                       --   object's parent.
+                         , pos :: Either Coord -- | Specify absolute position
+                                               --   of the bottom-left corner
+                                               --   of the object.
+                                         (HAlign, VAlign) -- | Specify alignment
+                                                          --   relative to the
+                                                          --   parent
 
                          , rendDims :: Dimensions -- ^ The dimensions of the object.
 
                          -- | The coordinates of the point to rotate around,
                          --   relative to the bottom-left of the object.
-                         , rotateAround :: Coord
+                         --   If Nothing, rotation is around the middle of the
+                         --   object.
+                         , rotateAround :: Maybe Coord
 
                          -- | The amount to rotate the object by, in radians.
                          --   Positive values are clockwise.
                          , rotation :: Double
-
-                         -- | An optional vertical alignment for the object,
-                         --   relative to its parent. If this is set, the
-                         --   y-component of the 'pos' field will be ignored.
-                         , vAlign :: Maybe VAlign
-
-                         -- | An optional horizontal alignment for the object,
-                         --   relative to its parent. If this is set, the
-                         --   x-component of the 'pos' field will be ignored.
-                         , hAlign :: Maybe HAlign
 
                          -- | Any child renderers are listed here. When the UI
                          --   library renders a frame, first the current
@@ -97,12 +91,10 @@ data Renderer = Renderer { render :: GL () -- ^ Draws the object onto the screen
 --   See: 'Renderer'
 defaultRenderer :: Renderer
 defaultRenderer = Renderer { render = return ()
-                           , pos = (0, 0)
+                           , pos = Left (0, 0)
                            , rendDims = (0, 0)
-                           , rotateAround = (0, 0)
+                           , rotateAround = Nothing
                            , rotation = 0.0
-                           , vAlign = Nothing
-                           , hAlign = Nothing
                            , children = []
                            }
 
@@ -111,22 +103,21 @@ defaultRenderer = Renderer { render = return ()
 absPos :: Dimensions -- ^ The dimensions of the parent object.
        -> Renderer  -- ^ The renderer whose new position we need.
        -> Coord
-absPos parentDims r = let x' = case hAlign r of
-                                  Nothing                 -> x
-                                  Just (LeftAlign off)    -> off
-                                  Just (RightAlign off)   -> pdx - dx + off
-                                  Just (HCenterAlign off) -> (pdx - dx) `div` 2 + off
+absPos parentDims r = case pos r of
+                        Left p -> p
+                        Right (hAlign, vAlign) -> let
+                          x' = case hAlign of
+                                  LeftAlign off    -> px + off
+                                  RightAlign off   -> px - dx + off
+                                  HCenterAlign off -> (px - dx) `div` 2 + off
 
-                          y' = case vAlign r of
-                                  Nothing                 -> y
-                                  Just (BottomAlign off)  -> off
-                                  Just (TopAlign off)     -> pdy - dy + off
-                                  Just (VCenterAlign off) -> (pdy - dy) `div` 2 + off
-                       in (x', y')
-    where
-        (x, y) = pos r
-        (dx, dy) = rendDims r
-        (pdx, pdy) = parentDims
+                          y' = case vAlign of
+                                  BottomAlign off  -> py + off
+                                  TopAlign off     -> py - dy + off
+                                  VCenterAlign off -> (py - dy) `div` 2 + off
+                          in (x', y')
+                          where (dx, dy) = rendDims r
+                                (px, py) = parentDims
 
 rad2deg :: Double -> Double
 rad2deg rad = rad * 180 / pi
@@ -146,8 +137,10 @@ updateWindow rootDims rs = do clear [ ColorBuffer ]
     where
         render' parentDims r = preservingMatrix $ do
                                let (x, y) = absPos parentDims r
+                                   (w, h) = rendDims r
+                                   center = (x + w `div` 2, y + h `div` 2)
                                translate $ Vector3 (fromIntegral x) (fromIntegral y) (0 :: GLdouble)
-                               applyRotation (rotation r) (rotateAround r)
+                               applyRotation (rotation r) (maybe center id $ rotateAround r)
                                render r
                                forM_ (children r) $ render' (rendDims r)
 
