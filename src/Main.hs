@@ -1,33 +1,33 @@
 module Main (main) where
 
-import Chess()
-import Config
-import Data.Function
-import Data.List
-import Game.Engine
-import Graphics.Rendering.OpenGL.Monad as GL
-import Graphics.UI.GLUT ( Window
-                        , createWindow
-                        )
-import System.IO (stderr)
-import System.Log.Formatter
-import System.Log.Handler as H
-import System.Log.Handler.Simple
-import System.Log.Logger as L
-import UI.Colors
-import UI.Render
-import UI.TextureLoader()
+import           Chess()
+import qualified Config
+import           Data.Function
+import           Data.List
+import           Game.Engine
+import           Graphics.Rendering.OpenGL.Monad as GL
+import           Graphics.UI.GLUT ( Window
+                                  , createWindow
+                                  )
+import           System.IO (stderr)
+import           System.Log.Formatter
+import           System.Log.Handler as H
+import           System.Log.Handler.Simple
+import           System.Log.Logger as L
+import           UI.Colors
+import           UI.Render
+import           UI.TextureLoader()
 
 -- | Initializes all the loggers' states to what was defined in the config file.
 configLogger :: IO ()
 configLogger = do root <- getRootLogger
 
-                  let formatter' = simpleLogFormatter logFormat
+                  let formatter' = simpleLogFormatter Config.logFormat
 
-                  consoleOutput <- streamHandler stderr logLevel
+                  consoleOutput <- streamHandler stderr Config.logLevel
 
                   let log' = foldl' (flip ($)) root
-                        [ L.setLevel logLevel
+                        [ L.setLevel Config.logLevel
                         , setHandlers $ map (`H.setFormatter` formatter')
                               [ consoleOutput ]
                         ]
@@ -39,7 +39,7 @@ configLogger = do root <- getRootLogger
                                                     L.setLevel prio
 
                   -- Set up all our custom logger levels.
-                  mapM_ addLogLevel customLogLevels
+                  mapM_ addLogLevel Config.customLogLevels
 
 data GameState = GameState { renderers :: Renderer
                            }
@@ -95,5 +95,5 @@ main = do configLogger
                                                , WithSamplesPerPixel 2
                                                ]
 
-          dims <- runGraphics . initWindow =<< createWindow "Chess - By B & C"
+          dims <- runGraphics . initWindow =<< createWindow Config.windowTitle
           runGame dims initState display update onEvent
