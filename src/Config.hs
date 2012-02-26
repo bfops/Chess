@@ -1,12 +1,8 @@
+{-# LANGUAGE OverloadedStrings #-}
 -- | All built-in configuration goes here, to ease deployment and debugging.
-module Config ( logLevel
-              , customLogLevels
-              , logFormat
-              , texturePrefix
-              , targetFramerate
-              , windowDimensions
-              ) where
+module Config where
 
+import Data.Text
 import System.Log.Logger
 import Util.Defs
 
@@ -39,7 +35,7 @@ customLogLevels = []
 --   * $tid - The thread ID
 --   * $pid - Process ID (Not available on windows)
 --   * $time - The current time
---   * $utcTime - The current time in UTC Time 
+--   * $utcTime - The current time in UTC Time
 logFormat :: String
 logFormat = "[$time : $loggername : $prio] $msg"
 
@@ -56,3 +52,7 @@ targetFramerate = 120
 --   monstrosity.
 windowDimensions :: Dimensions
 windowDimensions = (800, 600)
+
+-- | The text to display the window's title bar.
+windowTitle :: Text
+windowTitle = "Chess - By B & C"

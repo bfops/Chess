@@ -20,12 +20,12 @@ import Util.HashString
 configLogger :: IO ()
 configLogger = do root <- getRootLogger
 
-                  let formatter' = simpleLogFormatter logFormat
+                  let formatter' = simpleLogFormatter Config.logFormat
 
-                  consoleOutput <- streamHandler stderr logLevel
+                  consoleOutput <- streamHandler stderr Config.logLevel
 
                   let log' = foldl' (flip ($)) root
-                        [ L.setLevel logLevel
+                        [ L.setLevel Config.logLevel
                         , setHandlers $ map (`H.setFormatter` formatter')
                               [ consoleOutput ]
                         ]
@@ -33,8 +33,11 @@ configLogger = do root <- getRootLogger
                   -- Apply the changes to the global logger.
                   saveGlobalLogger log'
 
+                  let addLogLevel (l, prio) = updateGlobalLogger l $
+                                                  L.setLevel prio
+
                   -- Set up all our custom logger levels.
-                  mapM_ (\(logName, prio) -> updateGlobalLogger logName $ L.setLevel prio) customLogLevels
+                  mapM_ addLogLevel Config.customLogLevels
 
 data GameState = GameState { shouldShow :: Bool -- Should the scene be rendered?
                            }
@@ -42,15 +45,16 @@ data GameState = GameState { shouldShow :: Bool -- Should the scene be rendered?
 display :: GameState -> Dimensions -> Loaders -> GL ()
 display gs dims ls = let (Just tex) = getResource (textureL ls) "yellow-dot.png"
                          rect = (rectangleRenderer 200 200 red)
-                                  { hAlign = Just $ HCenterAlign 0
-                                  , vAlign = Just $ VCenterAlign 0
+                                  { pos = Right ( HCenterAlign 0
+                                                , VCenterAlign 0
+                                                )
                                   , rotation = pi/4
-                                  , rotateAround = (100, 100)
                                   , children = [ dot ]
                                   }
                          dot = (textureRenderer tex)
-                                  { hAlign = Just $ HCenterAlign 0
-                                  , vAlign = Just $ VCenterAlign 0
+                                  { pos = Right ( HCenterAlign 0
+                                                , VCenterAlign 0
+                                                )
                                   }
                      in if shouldShow gs then updateWindow dims dot
                                          else return ()
@@ -68,10 +72,8 @@ onEvent gs _ = gs
 initState :: GameState
 initState = GameState False
 
--- Declare initial window size, position, and display mode (single buffer and
--- RGBA). Open window with "hello" in its title bar. Call initialization
--- routines. Register callback function to display graphics. Enter main loop and
--- process events.
+-- Call initialization routines. Register callback function to display
+-- graphics. Enter main loop and process events.
 main :: IO ()
 main = do configLogger
-          runGame "Chess - By B & C" initState display update onEvent
+          runGame Config.windowTitle initState display update onEvent

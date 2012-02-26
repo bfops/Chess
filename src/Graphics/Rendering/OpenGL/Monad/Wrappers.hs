@@ -36,6 +36,7 @@ module Graphics.Rendering.OpenGL.Monad.Wrappers ( module Graphics.Rendering.Open
                                                 , OGL.HintMode(..)
                                                 , OGL.HintTarget(..)
                                                 , GLUT.DisplayMode(..)
+                                                , GLUT.Window
                                                 , OGL.textureWrapMode
                                                 , OGL.textureFilter
                                                 , OGL.texture
@@ -81,6 +82,7 @@ module Graphics.Rendering.OpenGL.Monad.Wrappers ( module Graphics.Rendering.Open
                                                 , getArgsAndInitialize
                                                 , get
                                                 , ortho2D
+                                                , createWindow
                                                 -- * Logging Functions
                                                 , glDebugM
                                                 , glInfoM
@@ -92,6 +94,7 @@ module Graphics.Rendering.OpenGL.Monad.Wrappers ( module Graphics.Rendering.Open
                                                 , glEmergencyM
                                                 ) where
 
+import qualified Data.Text as T
 import qualified Graphics.Rendering.OpenGL.GL as OGL
 import qualified Graphics.Rendering.OpenGL.GLU as OGLU
 import qualified Graphics.UI.GLUT as GLUT
@@ -217,6 +220,10 @@ ortho2D a b c d = unsafeRunOnGraphicsCard $ OGLU.ortho2D (realToFrac a)
                                                          (realToFrac c)
                                                          (realToFrac d)
 {-# INLINE ortho2D #-}
+
+createWindow :: T.Text -> GL GLUT.Window
+createWindow = unsafeRunOnGraphicsCard . GLUT.createWindow . T.unpack
+{-# INLINE createWindow #-}
 
 infixr 9 .:
 (.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d

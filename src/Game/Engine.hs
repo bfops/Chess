@@ -14,6 +14,7 @@ import           Control.DeepSeq
 
 import qualified Data.Foldable as F
 import           Data.Function
+import qualified Data.Text     as T
 import           Data.Ratio
 import           Data.Sequence ( Seq, (|>) )
 import qualified Data.Sequence as Seq
@@ -24,9 +25,7 @@ import Game.ResourceLoader
 import Game.Texture
 
 import           Graphics.Rendering.OpenGL.Monad
-import           Graphics.UI.GLUT ( Window
-                                  , createWindow
-                                  , Key(..)
+import           Graphics.UI.GLUT ( Key(..)
                                   , KeyState(..)
                                   , Modifiers(..)
                                   , Position(..)
@@ -54,7 +53,7 @@ data Loaders = Loaders { textureL :: ResourceLoader DynamicImage Texture
 
 -- | Starts the main loop of a game. Games will be run full screen and at the
 --   maximum possible resolution.
-runGame :: String
+runGame :: T.Text
         -- ^ The title of the game window.
         -> gameState
         -- ^ The initial game's state.
@@ -77,15 +76,14 @@ runGame title initState rend updateT updateE = do runGraphics $ getArgsAndInitia
                                                                                       , RGBAMode
                                                                                       , WithSamplesPerPixel 2
                                                                                       ]
-                                                  w <- createWindow title
-                                                  dims@(width, height) <- runGraphics $ initWindow w
+
+                                                  w <- runGraphics $ initWindow title windowDimensions
 
                                                   uState <- atomically $ newTVar initState
-                                                  winDims <- atomically $ newTVar dims
+                                                  winDims <- atomically $ newTVar windowDimensions
                                                   loads <- newMVar $ Loaders emptyResourceLoader
 
                                                   eventQ <- atomically $ newTVar Seq.empty
-
 
                                                   let state = GameState { userState = uState
                                                                         , windowDims = winDims
@@ -200,22 +198,23 @@ onMotion :: TVar (Seq.Seq Event)
 onMotion updateE pos = return ()
 
 -- | Initializes a new window, and returns its dimensions.
-initWindow :: Window -> GL Dimensions
-initWindow w = do currentWindow $= Just w
+initWindow :: T.Text -> Dimensions -> GL Window
+initWindow title dims  = do w <- createWindow title
+                            currentWindow $= Just w
 
-                  windowSize $= uncurry (Size `on` fromIntegral) windowDimensions
+                            windowSize $= uncurry (Size `on` fromIntegral) dims
 
-                  -- Enable antialiasing, and general graphical nicities.
-                  lineSmooth $= Enabled
-                  pointSmooth $= Enabled
-                  polygonSmooth $= Enabled
-                  blend $= Enabled
-                  blendFunc $= (SrcAlpha, OneMinusSrcAlpha)
-                  lineWidth $= 1
+                            -- Enable antialiasing, and general graphical nicities.
+                            lineSmooth $= Enabled
+                            pointSmooth $= Enabled
+                            polygonSmooth $= Enabled
+                            blend $= Enabled
+                            blendFunc $= (SrcAlpha, OneMinusSrcAlpha)
+                            lineWidth $= 2
 
-                  mapM_ (\ty -> hint ty $= Nicest) [ PointSmooth
-                                                  , LineSmooth
-                                                  , PolygonSmooth
-                                                  ]
+                            mapM_ (\ty -> hint ty $= Nicest) [ PointSmooth
+                                                            , LineSmooth
+                                                            , PolygonSmooth
+                                                            ]
 
-                  return windowDimensions
+                            return w

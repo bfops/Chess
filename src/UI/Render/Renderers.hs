@@ -46,16 +46,18 @@ renderPrimitive' primTy col verts = do GL.color col
 -- | A simple debug renderer. Draw this if you're just experimenting with
 --   layout.
 rectangleRenderer :: GL.Color a
-                  =>  Int -- ^ The width of the desired rectangle.
+                  => Int  -- ^ The width of the desired rectangle.
                   -> Int  -- ^ The height of the desired rectangle.
                   -> a    -- ^ The color of the desired rectangle.
                   -> Renderer
 rectangleRenderer width height col =
-    defaultRenderer { render = renderPrimitive' GL.LineLoop col [ (left, top)
-                                                                , (right, top)
-                                                                , (right, bottom)
-                                                                , (left, bottom)
-                                                                ]
+    defaultRenderer { render = renderPrimitive' GL.LineLoop
+                                                col
+                                                [ (left, top)
+                                                , (right, top)
+                                                , (right, bottom)
+                                                , (left, bottom)
+                                                ]
                     , rendDims = (width, height)
                     }
     where

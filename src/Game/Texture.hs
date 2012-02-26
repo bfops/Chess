@@ -176,8 +176,6 @@ loadTexture' tex handle = do let tex'        = noJPEG tex -- OpenGL can't handle
                                               0
                                               $ GL.PixelData fmt GL.UnsignedByte ptr
 
-                             GL.textureBinding GL.Texture2D GL.$= Nothing
-
                              newTexture width height handle
 
 -- | Draws a texture onto the screen, with position, rotation, scale, etc.
