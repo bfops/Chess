@@ -1,4 +1,4 @@
-{-# LANGUAGE Rank2Types, MultiParamTypeClasses #-}
+{-# LANGUAGE Rank2Types, MultiParamTypeClasses, DeriveDataTypeable #-}
 -- | This module handles all things related to the loading and unloading of
 --   Textures. The usual workflow with these is to grab an image from disk,
 --   then upload it to graphics memory as needed.
@@ -21,7 +21,9 @@ import qualified Config
 import           Control.Applicative
 import           Control.Concurrent.MVar
 import           Control.DeepSeq
+import           Data.Global
 import qualified Data.Text                       as T
+import           Data.Typeable
 import qualified Data.Vector.Storable            as V
 import           Data.Word
 import           Foreign ( ForeignPtr, touchForeignPtr )
@@ -32,10 +34,14 @@ import qualified Graphics.Rendering.OpenGL.Monad as GL
 import qualified Graphics.Rendering.OpenGL.Monad.Unsafe as UGLY
 import qualified Paths_Chess                     as CP -- :)
 import           System.FilePath
-import           System.IO.Unsafe ( unsafePerformIO )
 import           System.Log.Logger
 
-type TextureHandle = GL.TextureObject
+newtype TextureHandle = THandle GL.TextureObject
+    deriving (Show, Eq, Ord, Typeable)
+
+unHandle :: TextureHandle -> GL.TextureObject
+unHandle (THandle x) = x
+{-# INLINE unHandle #-}
 
 -- | A metadata wrapper around an OpenGL 'TextureObject'. Generally, you will
 --   pass 'Texture' around internally, and use 'texHandle' when dealing
@@ -46,18 +52,15 @@ data Texture = Texture { texWidth  :: !Int -- ^ Width in pixels.
                        --   This handle is INVALID if the parent texture
                        --   becomes unreachable. Therefore, never store
                        --   a copy of it - just access it as you need it.
-                       , texHandle :: !GL.TextureObject
+                       , texHandle :: !TextureHandle
                        -- | By attaching a foreign pointer to the texture,
                        --   we can add a finalizer to release it when all
                        --   references are lost.
                        , texPtr :: {-# UNPACK #-} !(ForeignPtr ())
                        }
+    deriving (Show, Eq, Ord, Typeable)
 
-instance NFData Texture where
-    rnf (Texture width height hand _) = rnf width  `seq`
-                                        rnf height `seq`
-                                        hand       `seq`
-                                        ()
+instance NFData Texture
 
 instance LoadableResource DynamicImage Texture where
     fromDisk   = getImage
@@ -92,14 +95,13 @@ instance LoadableResource DynamicImage Texture where
 -- | A list of textures awaiting finalization.
 --   Yes, this is a global variable. Deal with it.
 toFinalize :: MVar [TextureHandle]
-toFinalize = unsafePerformIO $ newMVar []
-{-# NOINLINE toFinalize #-}
+toFinalize = declareMVar "Game.Texture.toFinalize" []
 
 -- | Runs the finalizers of anything in the toFinalize list.
 cleanupFinalizers :: IO ()
 cleanupFinalizers = modifyMVar_ toFinalize (\x -> freeTex x >> return [])
     where
-        freeTex = GL.runGraphics . GL.deleteObjectNames
+        freeTex = GL.runGraphics . GL.deleteObjectNames . map unHandle
 
 -- | Allocates a new texture, associating a finalizer with it so OpenGL cleans
 --   its shit up.
@@ -138,12 +140,12 @@ getImage name = do name' <- CP.getDataFileName $ Config.texturePrefix </> T.unpa
 
 -- | Uploads an image into OpenGL's graphics memory.
 uploadTexture :: DynamicImage -> GL.GL Texture
-uploadTexture img = (head <$> GL.genObjectNames 1) >>= loadTexture' img
+uploadTexture img = ((THandle . head) <$> GL.genObjectNames 1) >>= loadTexture' img
 
 -- | Upoads multiple textures at once. Slightly more efficient than calling
 --   'loadTexture' repeatedly.
 uploadTextures :: [DynamicImage] -> GL.GL [Texture]
-uploadTextures xs = GL.genObjectNames (length xs)
+uploadTextures xs = (map THandle <$> GL.genObjectNames (length xs))
                  >>= mapM (uncurry loadTexture') . zip xs
 
 -- | Uploads a texture from memory into the graphics card. Internal
@@ -159,7 +161,7 @@ loadTexture' tex handle = do let tex'        = noJPEG tex -- OpenGL can't handle
                              GL.glDebugM "Game.Texture.loadTexture'"
                                 $ "Uploading a " ++ show width ++ "x" ++ show height ++ " texture into object " ++ show handle
 
-                             GL.textureBinding GL.Texture2D GL.$= Just handle
+                             GL.textureBinding GL.Texture2D GL.$= Just (unHandle handle)
 
                              -- Since we don't modify the actual image data, we
                              -- can avoid a copy (unsafeWith), and run it on the
@@ -191,7 +193,7 @@ renderTexture tex = do GL.textureWrapMode GL.Texture2D GL.S GL.$= (GL.Repeated, 
                        GL.textureFunction      GL.$= GL.Combine
 
                        -- Set current texture.
-                       GL.textureBinding GL.Texture2D GL.$= Just (texHandle tex)
+                       GL.textureBinding GL.Texture2D GL.$= Just (unHandle $ texHandle tex)
 
                        -- Set to opaque.
                        GL.currentColor GL.$= GL.Color4 1.0 1.0 1.0 1.0
