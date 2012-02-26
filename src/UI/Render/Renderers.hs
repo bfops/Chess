@@ -5,7 +5,7 @@ module UI.Render.Renderers ( rectangleRenderer
                            ) where
 
 import Graphics.Rendering.OpenGL.Monad as GL
-import UI.Texture
+import Game.Texture
 import UI.Render.Core
 
 renderText :: String -> String -> GL ()

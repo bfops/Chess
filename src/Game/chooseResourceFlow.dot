@@ -1,0 +1,24 @@
+digraph resource_request_graph {
+
+    nodesep=1.0
+    node [ color=Red, fontname=Droid ]
+    edge [ color=Blue ]
+
+    SReqs [ label = "Synchronous Requests" ]
+    AReqs [ label = "Asynchronous Requests" ]
+    LPrime [ label = "LOADED'" ]
+    DPrime [ label = "DEFERRED'" ]
+    PPrime [ label = "PRELOAD'" ]
+    RPrime [ label = "REQS'" ]
+
+    SReqs->LPrime [ label = "Already in loaded." ]
+    SReqs->LPrime [ label = "Already in preload." ]
+    SReqs->DPrime [ label = "Already in deferred." ]
+    SReqs->DPrime [ label = "Already in preload as an IVar." ]
+    SReqs->RPrime [ label = "Not in LOADED' or DEFERRED'." ]
+    
+    AReqs->DPrime [ label = "Already in deferred." ]
+    AReqs->PPrime [ label = "Already in loaded." ]
+    AReqs->PPrime [ label = "Already in preloaded." ]
+    AReqs->RPrime [ label = "Not in PRELOAD'." ]
+}

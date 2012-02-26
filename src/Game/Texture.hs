@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE Rank2Types, MultiParamTypeClasses #-}
 -- | This module handles all things related to the loading and unloading of
 --   Textures. The usual workflow with these is to grab an image from disk,
 --   then upload it to graphics memory as needed.
@@ -6,12 +6,13 @@
 --   Textures are automatically deallocated by the garbage collector so you
 --   don't need to think about resource allocation, however, this is quite
 --   experimental. One day, I'll verify this is working.
-module UI.Texture ( Texture( texWidth, texHeight )
-                  , getImage
-                  , uploadTexture
-                  , uploadTextures
-                  , renderTexture
-                  ) where
+module Game.Texture ( Texture( texWidth, texHeight )
+                    , DynamicImage
+                    , getImage
+                    , uploadTexture
+                    , uploadTextures
+                    , renderTexture
+                    ) where
 
 import           Codec.Picture                   as Pic
 import           Codec.PicturePrime              as PicPrime
@@ -26,6 +27,7 @@ import           Data.Word
 import           Foreign ( ForeignPtr, touchForeignPtr )
 import           Foreign.Concurrent
 import           Foreign.Ptr
+import           Game.ResourceLoader
 import qualified Graphics.Rendering.OpenGL.Monad as GL
 import qualified Graphics.Rendering.OpenGL.Monad.Unsafe as UGLY
 import qualified Paths_Chess                     as CP -- :)
@@ -56,6 +58,10 @@ instance NFData Texture where
                                         rnf height `seq`
                                         hand       `seq`
                                         ()
+
+instance LoadableResource DynamicImage Texture where
+    fromDisk   = getImage
+    toGraphics = uploadTextures
 
 -- The whole texture allocation scheme here is just plain crafty (and also a
 -- potential source for a huge number of bugs.
@@ -150,6 +156,9 @@ loadTexture' tex handle = do let tex'        = noJPEG tex -- OpenGL can't handle
                                  intFmt      = internalPixelFormat tex'
                                  fmt         = pixelFormat tex'
 
+                             GL.glDebugM "Game.Texture.loadTexture'"
+                                $ "Uploading a " ++ show width ++ "x" ++ show height ++ " texture into object " ++ show handle
+
                              GL.textureBinding GL.Texture2D GL.$= Just handle
 
                              -- Since we don't modify the actual image data, we
@@ -186,6 +195,9 @@ renderTexture tex = do GL.textureWrapMode GL.Texture2D GL.S GL.$= (GL.Repeated, 
                        -- Set current texture.
                        GL.textureBinding GL.Texture2D GL.$= Just (texHandle tex)
 
+                       -- Set to opaque.
+                       GL.currentColor GL.$= GL.Color4 1.0 1.0 1.0 1.0
+
                        -- Blam! Draw that textured square. We must move clockwise
                        -- from the top left of the image, so sayeth OpenGL.
                        GL.renderPrimitive GL.Polygon $ do GL.texCoord' 0 0; GL.vertex' left top;
@@ -208,10 +220,10 @@ renderTexture tex = do GL.textureWrapMode GL.Texture2D GL.S GL.$= (GL.Repeated, 
 -- | Lets us pass a function "through" a dynamic image, ignoring its type and
 --   getting right down to the raw data.
 dynToStaticImage :: (forall a. Image a -> b) -> DynamicImage -> b
-dynToStaticImage f (ImageY8 img)     = f img
-dynToStaticImage f (ImageYA8 img)    = f img
-dynToStaticImage f (ImageRGB8 img)   = f img
-dynToStaticImage f (ImageRGBA8 img)  = f img
+dynToStaticImage f (ImageY8     img) = f img
+dynToStaticImage f (ImageYA8    img) = f img
+dynToStaticImage f (ImageRGB8   img) = f img
+dynToStaticImage f (ImageRGBA8  img) = f img
 dynToStaticImage f (ImageYCbCr8 img) = f img
 
 -- | Gets a dynamic image's width.

@@ -51,6 +51,7 @@ module Graphics.Rendering.OpenGL.Monad.Wrappers ( module Graphics.Rendering.Open
                                                 , OGL.lineWidth
                                                 , OGL.hint
                                                 , OGL.viewport
+                                                , OGL.currentColor
                                                 , GLUT.initialDisplayMode
                                                 , GLUT.displayCallback
                                                 , GLUT.currentWindow
@@ -80,6 +81,15 @@ module Graphics.Rendering.OpenGL.Monad.Wrappers ( module Graphics.Rendering.Open
                                                 , getArgsAndInitialize
                                                 , get
                                                 , ortho2D
+                                                -- * Logging Functions
+                                                , glDebugM
+                                                , glInfoM
+                                                , glNoticeM
+                                                , glWarningM
+                                                , glErrorM
+                                                , glCriticalM
+                                                , glAlertM
+                                                , glEmergencyM
                                                 ) where
 
 import qualified Graphics.Rendering.OpenGL.GL as OGL
@@ -105,6 +115,7 @@ import Graphics.Rendering.OpenGL.Raw.Core31 ( GLbitfield
                                             , GLuint
                                             , GLushort
                                             )
+import System.Log.Logger
 
 vertex :: OGL.Vertex a => a -> GL ()
 vertex = unsafeRunOnGraphicsCard . OGL.vertex
@@ -206,3 +217,40 @@ ortho2D a b c d = unsafeRunOnGraphicsCard $ OGLU.ortho2D (realToFrac a)
                                                          (realToFrac c)
                                                          (realToFrac d)
 {-# INLINE ortho2D #-}
+
+infixr 9 .:
+(.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
+(.:) f g x y = f $ g x y
+{-# INLINE (.:) #-}
+
+glDebugM :: String -> String -> GL ()
+glDebugM = unsafeRunOnGraphicsCard .: debugM
+{-# INLINE glDebugM #-}
+
+glInfoM :: String -> String -> GL ()
+glInfoM = unsafeRunOnGraphicsCard .: infoM
+{-# INLINE glInfoM #-}
+
+glNoticeM :: String -> String -> GL ()
+glNoticeM = unsafeRunOnGraphicsCard .: noticeM
+{-# INLINE glNoticeM #-}
+
+glWarningM :: String -> String -> GL ()
+glWarningM = unsafeRunOnGraphicsCard .: noticeM
+{-# INLINE glWarningM #-}
+
+glErrorM :: String -> String -> GL ()
+glErrorM = unsafeRunOnGraphicsCard .: errorM
+{-# INLINE glErrorM #-}
+
+glCriticalM :: String -> String -> GL ()
+glCriticalM = unsafeRunOnGraphicsCard .: criticalM
+{-# INLINE glCriticalM #-}
+
+glAlertM :: String -> String -> GL ()
+glAlertM = unsafeRunOnGraphicsCard .: alertM
+{-# INLINE glAlertM #-}
+
+glEmergencyM :: String -> String -> GL ()
+glEmergencyM = unsafeRunOnGraphicsCard .: emergencyM
+{-# INLINE glEmergencyM #-}

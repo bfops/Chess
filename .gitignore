@@ -3,4 +3,5 @@
 *.a
 dist/
 inst/
+cabal-dev/
 report.html

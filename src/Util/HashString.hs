@@ -18,6 +18,7 @@
 --   compile time, saving us from having to do _any_ hashing at runtime.
 module Util.HashString ( -- * Normal Haskell Interface
                          HashString(..)
+                       , toHashString
                        , fromHashString
                        -- * Template Haskell Helpers
                        , hashed
@@ -52,9 +53,7 @@ instance NFData HashString where
     rnf (HashString _ _) = ()
 
 instance IsString HashString where
-    fromString s = HashString (hash asText) asText
-        where
-            asText = T.pack s
+    fromString = toHashString
 
 instance Ord HashString where
     compare (HashString ha a) (HashString hb b) = case compare ha hb of
@@ -64,6 +63,15 @@ instance Ord HashString where
 instance Eq HashString where
     (HashString ha sa) == (HashString hb sb) = ha == hb
                                            && sa == sb
+
+instance Show HashString where
+    show (HashString _ s) = show s
+
+-- | Converts a string to a 'HashString'.
+toHashString :: String -> HashString
+toHashString s = HashString (hash asText) asText
+    where
+        asText = T.pack s
 
 -- | Converts a 'HashString' to text.
 fromHashString :: HashString -> T.Text
