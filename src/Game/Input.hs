@@ -184,11 +184,6 @@ updateKeyMask m ks = let (on, off) = ((map fst) *** (map fst)) . L.partition snd
                          off' = foldl' clearBit  m   off
                       in        foldl' setBit   off' on
 
--- Builds a mask where all the given keys are not clicked, keeping the rest
--- of the map intact.
---clearKeyMask :: KeyMask -> [Key] -> KeyMask
---clearKeyMask km = foldl' clearBit km . map keyToIndex
-
 -- | No keys depressed, mouse in the bottom-left. This is used as a placeholder
 --   before real updates are run.
 --
