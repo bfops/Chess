@@ -137,13 +137,13 @@ updateWindow rootDims rs = do clear [ ColorBuffer ]
                               swapBuffers
     where
         render' parentDims r = preservingMatrix $ do
-                               let (x, y) = absPos parentDims r
-                                   (w, h) = rendDims r
-                                   center = (x + w `div` 2, y + h `div` 2)
-                               translate $ Vector3 (fromIntegral x) (fromIntegral y) (0 :: GLdouble)
-                               applyRotation (rotation r) (fromMaybe center $ rotateAround r)
-                               render r
-                               forM_ (children r) $ render' (rendDims r)
+                                let (x, y) = absPos parentDims r
+                                    (w, h) = rendDims r
+                                    center = (w `div` 2, h `div` 2)
+                                translate $ Vector3 (fromIntegral x) (fromIntegral y) (0 :: GLdouble)
+                                applyRotation (rotation r) (fromMaybe center $ rotateAround r)
+                                render r
+                                forM_ (children r) $ render' (rendDims r)
 
 -- | To apply a rotation around a point, translate to that point, apply
 --   the rotation, then translate backwards. To visualize this, picture

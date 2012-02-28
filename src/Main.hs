@@ -49,13 +49,14 @@ display gs dims ls = let tex = getResource (textureL ls) "yellow-dot.png"
                                   { pos = Right ( HCenterAlign 0
                                                 , VCenterAlign 0
                                                 )
-                                  , rotation = 0
-                                  --, children = [ dot ]
+                                  , rotation = pi/4
+                                  , children = [ dot ]
                                   }
                          dot = (textureRenderer tex)
                                   { pos = Right ( HCenterAlign 0
                                                 , VCenterAlign 0
                                                 )
+                                  , rotation = -pi/4
                                   }
                      in if shouldShow gs then updateWindow dims rect
                                          else return ()
