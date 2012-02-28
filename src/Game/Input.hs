@@ -125,16 +125,16 @@ gk2k (GLUT.MouseButton mb) = case mb of
                                  GLUT.WheelDown    -> Just WheelDown
                                  _                 -> Nothing
 
-isUp :: GLUT.KeyState -> Bool
-isUp GLUT.Up   = True
-isUp GLUT.Down = False
+isDown :: GLUT.KeyState -> Bool
+isDown GLUT.Up   = False
+isDown GLUT.Down = True
 
 -- | "GLUT.Modifiers to Key". Converts the shift-ctrl-alt modifiers to the
 --   keys the represent.
 gm2k :: GLUT.Modifiers -> [(Key, Bool)]
-gm2k (GLUT.Modifiers s c a) = [ (KeyShift, isUp s)
-                              , (KeyCtrl,  isUp c)
-                              , (KeyAlt,   isUp a)
+gm2k (GLUT.Modifiers s c a) = [ (KeyShift, isDown s)
+                              , (KeyCtrl,  isDown c)
+                              , (KeyAlt,   isDown a)
                               ]
 
 #define K2I(ctor, n) keyToIndex ctor = n
@@ -221,7 +221,7 @@ onKeyMouse tis dims k ks ms (GLUT.Position x y) = atomically $
        let k' = gk2k k
            km' = gm2k ms
         in writeTVar tis $!! InputState
-                               (updateKeyMask keyboard $ maybeToList ((,isUp ks) <$> k') ++ km')
+                               (updateKeyMask keyboard $ maybeToList ((,isDown ks) <$> k') ++ km')
                                (fromIntegral x, dy-fromIntegral y) -- flip the y-coord. Fucking GLUT.
 
 -- | A GLUT 'motionCallback' that should be partially applied with a shared

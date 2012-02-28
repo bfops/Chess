@@ -1,8 +1,10 @@
-{-# LANGUAGE QuasiQuotes, OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes, OverloadedStrings, RecordWildCards #-}
 module Main (main) where
 
 import Chess()
 import Config
+import Control.Arrow
+import Control.Monad
 import Data.List
 import Game.Input
 import Game.Engine
@@ -43,37 +45,45 @@ configLogger = do root <- getRootLogger
 
 data GameState = GameState { shouldShow :: Bool -- Should the scene be rendered?
                            , rectPos :: Coord
+                           , rectRot :: Double -- rotation of the rectangle, in radians.
                            }
 
 display :: GameState -> Dimensions -> Loaders -> GL ()
 display gs dims ls = let tex = getResource (textureL ls) "yellow-dot.png"
                          rect = (rectangleRenderer 200 200 red)
-                                  { pos = Left $ rectPos gs
-                                  , children = [ dot ]
-                                  }
+                                    { pos = Left . ((subtract 100) *** (subtract 100)) $ rectPos gs
+                                    , children = [ dot ]
+                                    }
                          dot = (textureRenderer tex)
-                                  { pos = Right ( HCenterAlign 0
-                                                , VCenterAlign 0
-                                                )
-                                  , rotation = -pi/4
-                                  }
-                     in if shouldShow gs then updateWindow dims rect
-                                         else return ()
+                                    { pos = Right ( HCenterAlign 0
+                                                  , VCenterAlign 0
+                                                  )
+                                    , rotation = rectRot gs
+                                    }
+                      in when (shouldShow gs) $ updateWindow dims rect
 
 -- | Solves for the new position of the rectangle, using w-a-s-d as movement.
 solveNewPos :: Coord -> InputState -> Coord
 solveNewPos _ is = mousePos is
 
+solveNewRot :: Double -> InputState -> Double
+solveNewRot r is = r + v * fromIntegral
+                        ((fromEnum $ testKeys is [ KeyChar 'z' ])
+                       - (fromEnum $ testKeys is [ KeyChar 'x' ]))
+    where
+        v = 0.05 -- velocity
+
 -- | We don't do anything... for now.
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest])
 update gs _ is = return ( GameState { shouldShow = True,
-                                      rectPos = solveNewPos (rectPos gs) is
+                                      rectPos = solveNewPos (rectPos gs) is,
+                                      rectRot = solveNewRot (rectRot gs) is
                                     }
                         , [ Loaded [hashed|yellow-dot.png|]
                           ] )
 
 initState :: GameState
-initState = GameState False (100, 100)
+initState = GameState False (100, 100) 0
 
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.
