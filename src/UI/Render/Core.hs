@@ -12,6 +12,7 @@ module UI.Render.Core ( Renderer(..)
                       ) where
 
 import Control.Monad
+import Data.Maybe
 import Graphics.Rendering.OpenGL.Monad
 import Util.Defs
 
@@ -140,7 +141,7 @@ updateWindow rootDims rs = do clear [ ColorBuffer ]
                                    (w, h) = rendDims r
                                    center = (x + w `div` 2, y + h `div` 2)
                                translate $ Vector3 (fromIntegral x) (fromIntegral y) (0 :: GLdouble)
-                               applyRotation (rotation r) (maybe center id $ rotateAround r)
+                               applyRotation (rotation r) (fromMaybe center $ rotateAround r)
                                render r
                                forM_ (children r) $ render' (rendDims r)
 

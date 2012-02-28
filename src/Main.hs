@@ -4,6 +4,7 @@ module Main (main) where
 import Chess()
 import Config
 import Data.List
+import Game.Input
 import Game.Engine
 import Game.ResourceLoader
 import Graphics.Rendering.OpenGL.Monad as GL
@@ -43,31 +44,27 @@ data GameState = GameState { shouldShow :: Bool -- Should the scene be rendered?
                            }
 
 display :: GameState -> Dimensions -> Loaders -> GL ()
-display gs dims ls = let (Just tex) = getResource (textureL ls) "yellow-dot.png"
+display gs dims ls = let tex = getResource (textureL ls) "yellow-dot.png"
                          rect = (rectangleRenderer 200 200 red)
                                   { pos = Right ( HCenterAlign 0
                                                 , VCenterAlign 0
                                                 )
-                                  , rotation = pi/4
-                                  , children = [ dot ]
+                                  , rotation = 0
+                                  --, children = [ dot ]
                                   }
                          dot = (textureRenderer tex)
                                   { pos = Right ( HCenterAlign 0
                                                 , VCenterAlign 0
                                                 )
                                   }
-                     in if shouldShow gs then updateWindow dims dot
+                     in if shouldShow gs then updateWindow dims rect
                                          else return ()
 
 -- | We don't do anything... for now.
-update :: GameState -> Double -> IO (GameState, [ResourceRequest])
-update _ _ = return (GameState True,
-                      [ Loaded [hashed|yellow-dot.png|]
-                      ] )
-
--- | Event handling is currently unimplemented.
-onEvent :: GameState -> Event -> GameState
-onEvent gs _ = gs
+update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest])
+update _ _ _ = return (GameState True,
+                         [ Loaded [hashed|yellow-dot.png|]
+                         ] )
 
 initState :: GameState
 initState = GameState False
@@ -76,4 +73,4 @@ initState = GameState False
 -- graphics. Enter main loop and process events.
 main :: IO ()
 main = do configLogger
-          runGame Config.windowTitle initState display update onEvent
+          runGame Config.windowTitle initState display update

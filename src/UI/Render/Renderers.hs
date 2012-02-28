@@ -6,6 +6,7 @@ module UI.Render.Renderers ( rectangleRenderer
 
 import Graphics.Rendering.OpenGL.Monad as GL
 import Game.Texture
+import UI.Colors
 import UI.Render.Core
 
 renderText :: String -> String -> GL ()
@@ -21,10 +22,12 @@ renderText _ _ = undefined
 --   >                          , hAlign = HCenterAlign 0
 --   >                          , children = getCoinChildren
 --   >                          }
-textureRenderer :: Texture -> Renderer
-textureRenderer tex = defaultRenderer { render = renderTexture tex
-                                      , rendDims = (texWidth tex, texHeight tex)
-                                      }
+textureRenderer :: Maybe Texture -> Renderer
+textureRenderer tex = case tex of
+                        Just t -> defaultRenderer { render = renderTexture t
+                                                 , rendDims = (texWidth t, texHeight t)
+                                                 }
+                        Nothing -> rectangleRenderer 10 10 red
 
 textRenderer :: String -- ^ The name of the font we will use for rendering.
              -> String -- ^ The string we're drawing.

@@ -61,6 +61,7 @@ module Graphics.Rendering.OpenGL.Monad.Wrappers ( module Graphics.Rendering.Open
                                                 , GLUT.reshapeCallback
                                                 , GLUT.keyboardMouseCallback
                                                 , GLUT.motionCallback
+                                                , GLUT.passiveMotionCallback
                                                 , GLUT.fullScreenMode
                                                 , vertex
                                                 , texCoord

@@ -1,6 +1,5 @@
 -- | In this module, we provide a basic framework for running a game.
 module Game.Engine ( runGame
-                   , Event(..)
                    , Loaders ( textureL )
                    , Dimensions
                    ) where
@@ -10,25 +9,19 @@ import           Config
 import           Control.Applicative
 import           Control.Concurrent
 import           Control.Concurrent.STM
-import           Control.DeepSeq
 
-import qualified Data.Foldable as F
 import           Data.Function
 import qualified Data.Text     as T
 import           Data.Ratio
-import           Data.Sequence ( Seq, (|>) )
-import qualified Data.Sequence as Seq
 import           Data.Time.Clock
 import           Data.Time.Clock.POSIX
 
+import Game.Input as I
 import Game.ResourceLoader
 import Game.Texture
 
 import           Graphics.Rendering.OpenGL.Monad
-import           Graphics.UI.GLUT ( Key(..)
-                                  , KeyState(..)
-                                  , Modifiers(..)
-                                  , Position(..)
+import           Graphics.UI.GLUT ( Position(..)
                                   , mainLoop
                                   )
 
@@ -36,14 +29,9 @@ import System.Log.Logger
 
 import Util.Defs
 
-data Event = KeyUp
-           | KeyDown
-
-instance NFData Event where
-    rnf e = e `seq` ()
-
 data GameState s = GameState { userState  :: TVar s
                              , windowDims :: TVar Dimensions
+                             , inputSt    :: TVar InputState
                              , loaders    :: MVar Loaders
                              }
 
@@ -62,66 +50,59 @@ runGame :: T.Text
         --   This should do the minimum amount of work possible. All the hard
         --   stuff should be handled in the update function. The 'Dimensions'
         --   parameter is the current resolution of the display. Respect it!
-        -> (gameState -> Double -> IO (gameState, [ResourceRequest]))
-        -- ^ Updates the game's state, given a current time (in seconds).
-        --   All computationally expensive tasks should be done in here.
+        -> (gameState -> Double -> InputState -> IO (gameState, [ResourceRequest]))
+        -- ^ Updates the game's state, given a current time (in seconds), and
+        --   the keyboard/mouse input vector. All computationally expensive
+        --   tasks should be done in here.
         --
-        --   All resources required for rendering the described scene must be
+        --   Resources required for rendering the described scene must be
         --   specified in the second element of the returned tuple.
-        -> (gameState -> Event -> gameState)
-        -- ^ Updates the game's state given some input by the user.
         -> IO ()
-runGame title initState rend updateT updateE = do runGraphics $ getArgsAndInitialize
-                                                              >> initialDisplayMode $= [ DoubleBuffered
-                                                                                      , RGBAMode
-                                                                                      , WithSamplesPerPixel 2
-                                                                                      ]
+runGame title initState rend updateT = do runGraphics $ getArgsAndInitialize
+                                                      >> initialDisplayMode $= [ DoubleBuffered
+                                                                              , RGBAMode
+                                                                              , WithSamplesPerPixel 2
+                                                                              ]
 
-                                                  w <- runGraphics $ initWindow title windowDimensions
+                                          _ <- runGraphics $ initWindow title windowDimensions
 
-                                                  uState <- atomically $ newTVar initState
-                                                  winDims <- atomically $ newTVar windowDimensions
-                                                  loads <- newMVar $ Loaders emptyResourceLoader
+                                          state <- GameState <$> (atomically $ newTVar initState)
+                                                            <*> (atomically $ newTVar windowDimensions)
+                                                            <*> (atomically $ newTVar I.empty)
+                                                            <*> (newMVar    $ Loaders emptyResourceLoader)
 
-                                                  eventQ <- atomically $ newTVar Seq.empty
+                                          runGraphics $ do displayCallback       $= display state rend
+                                                           reshapeCallback       $= Just (reshape state)
+                                                           keyboardMouseCallback $= Just (onKeyMouse $ inputSt state)
+                                                           motionCallback        $= Just (onMotion   $ inputSt state)
+                                                           passiveMotionCallback $= Just (onMotion   $ inputSt state)
 
-                                                  let state = GameState { userState = uState
-                                                                        , windowDims = winDims
-                                                                        , loaders = loads
-                                                                        }
-                                                   in do runGraphics $ do displayCallback       $= display state rend
-                                                                          reshapeCallback       $= Just (reshape state)
-                                                                          keyboardMouseCallback $= Just (onKeyMouse eventQ)
-                                                                          motionCallback        $= Just (onMotion eventQ)
+                                          tid <- forkIO $ runUpdateLoop state updateT
 
-                                                         tid <- forkIO $ runUpdateLoop state updateT updateE eventQ
-
-                                                         mainLoop
-                                                         killThread tid
+                                          mainLoop
+                                          killThread tid
 
 runUpdateLoop :: GameState a
-              -> (a -> Double -> IO (a, [ResourceRequest]))
-              -> (a -> Event -> a)
-              -> TVar (Seq Event)
+              -> (a -> Double -> InputState -> IO (a, [ResourceRequest]))
               -> IO ()
-runUpdateLoop gs updateT updateE eventQ = getPOSIXTime >>= go
+runUpdateLoop gs updateT = getPOSIXTime >>= go
     where
         go :: NominalDiffTime -> IO ()
         go t1 = do t2 <- waitFor (t1 + framePeriod)
                    
                    us <- atomically . readTVar $ userState gs
+                   is <- atomically . readTVar $ inputSt gs
 
                    -- Update! We let the render thread read the old state while
                    -- we're updating, and clobber it afterwards. Although we
                    -- don't run it in the STM monad, the state is guaranteed
                    -- to be read-only while we update. If this is broken, fix
                    -- the offending code!
-                   us'  <- applyEventQueue us eventQ updateE
-                   (us'', reqs) <- updateT us' $ realToFrac t2
+                   (us', reqs) <- updateT us (realToFrac t2) is
 
                    modifyMVar_ (loaders gs) $ \ls ->
                         do ls' <- updateLoaders ls reqs
-                           atomically $ writeTVar (userState gs) us''
+                           atomically $ writeTVar (userState gs) us'
                            return ls'
 
                    go t2
@@ -146,21 +127,6 @@ waitFor targetTime = do currentTime <- getPOSIXTime
 framePeriod :: NominalDiffTime
 framePeriod = realToFrac $ 1 % targetFramerate
 
--- | Clears the event queue, folding the event function over the current game
---   state. Returns the new userstate.
---
---   TODO: Verify this doesn't lock the game up if someone holds a key down.
-applyEventQueue :: a
-                -> TVar (Seq Event)
-                -> (a -> Event -> a)
-                -> IO a
-applyEventQueue gs eventQ updateE = do
-    q <- atomically $ do q <- readTVar eventQ
-                         writeTVar eventQ Seq.empty
-                         return q
-
-    return $ F.foldl updateE gs q
-
 -- | The GLUT 'displayCallback' hook.
 display :: GameState a -> (a -> Dimensions -> Loaders -> GL ()) -> IO ()
 display gs rend = do (u, d, ls) <- modifyMVar (loaders gs) $ \ls ->
@@ -179,23 +145,6 @@ reshape gs sz@(Size x y) = do atomically $ writeTVar (windowDims gs) (fromIntegr
                                                loadIdentity
                                                ortho2D 0 (fromIntegral x) 0 (fromIntegral y)
                               infoM "Game.Engine.reshape" $ "Window dimensions: " ++ show x ++ "x" ++ show y
-
--- | Adds an event onto the given event queue.
---   Make sure the event is fully evaluated before calling this function. This
---   saves us from having to do it later, or worse - in an STM transaction.
-addEvent :: TVar (Seq Event) -> Event -> STM ()
-addEvent q e = do q' <- readTVar q
-                  writeTVar q $ q' |> e
-
--- TODO: Real events! This is pathetic.
-
-onKeyMouse :: TVar (Seq.Seq Event)
-           -> Key -> KeyState -> Modifiers -> Position -> IO ()
-onKeyMouse updateE key keyState mods pos = return ()
-
-onMotion :: TVar (Seq.Seq Event)
-         -> Position -> IO ()
-onMotion updateE pos = return ()
 
 -- | Initializes a new window, and returns its dimensions.
 initWindow :: T.Text -> Dimensions -> GL Window
