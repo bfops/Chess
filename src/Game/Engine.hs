@@ -62,6 +62,7 @@ runGame :: T.Text
 runGame title initState rend updateT = do runGraphics $ getArgsAndInitialize
                                                       >> initialDisplayMode $= [ DoubleBuffered
                                                                               , RGBAMode
+                                                                              , Multisampling
                                                                               , WithSamplesPerPixel 2
                                                                               ]
 

@@ -4,7 +4,6 @@ module Main (main) where
 import Chess()
 import Config
 import Data.List
-import Debug.Trace
 import Game.Input
 import Game.Engine
 import Game.ResourceLoader
