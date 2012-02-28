@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 -- | In this module, we provide a basic framework for running a game.
 module Game.Engine ( runGame
                    , Loaders ( textureL )
@@ -64,18 +65,18 @@ runGame title initState rend updateT = do runGraphics $ getArgsAndInitialize
                                                                               , WithSamplesPerPixel 2
                                                                               ]
 
-                                          _ <- runGraphics $ initWindow title windowDimensions
+                                          w <- runGraphics $ initWindow title windowDimensions
 
                                           state <- GameState <$> (atomically $ newTVar initState)
                                                             <*> (atomically $ newTVar windowDimensions)
                                                             <*> (atomically $ newTVar I.empty)
                                                             <*> (newMVar    $ Loaders emptyResourceLoader)
 
-                                          runGraphics $ do displayCallback       $= display state rend
+                                          runGraphics $ do displayCallback       $= display state w rend
                                                            reshapeCallback       $= Just (reshape state)
-                                                           keyboardMouseCallback $= Just (onKeyMouse $ inputSt state)
-                                                           motionCallback        $= Just (onMotion   $ inputSt state)
-                                                           passiveMotionCallback $= Just (onMotion   $ inputSt state)
+                                                           keyboardMouseCallback $= Just (onKeyMouse (inputSt state) $ windowDims state)
+                                                           motionCallback        $= Just (onMotion   (inputSt state) $ windowDims state)
+                                                           passiveMotionCallback $= Just (onMotion   (inputSt state) $ windowDims state)
 
                                           tid <- forkIO $ runUpdateLoop state updateT
 
@@ -85,27 +86,28 @@ runGame title initState rend updateT = do runGraphics $ getArgsAndInitialize
 runUpdateLoop :: GameState a
               -> (a -> Double -> InputState -> IO (a, [ResourceRequest]))
               -> IO ()
-runUpdateLoop gs updateT = getPOSIXTime >>= go
+runUpdateLoop gs updateT = getPOSIXTime >>= go 0
     where
-        go :: NominalDiffTime -> IO ()
-        go t1 = do t2 <- waitFor (t1 + framePeriod)
-                   
-                   us <- atomically . readTVar $ userState gs
-                   is <- atomically . readTVar $ inputSt gs
+        --   frame #        t1
+        go :: Integer -> NominalDiffTime -> IO ()
+        go !n t1 = do t2 <- waitFor (t1 + framePeriod)
+ 
+                      us <- atomically . readTVar $ userState gs
+                      is <- atomically . readTVar $ inputSt gs
 
-                   -- Update! We let the render thread read the old state while
-                   -- we're updating, and clobber it afterwards. Although we
-                   -- don't run it in the STM monad, the state is guaranteed
-                   -- to be read-only while we update. If this is broken, fix
-                   -- the offending code!
-                   (us', reqs) <- updateT us (realToFrac t2) is
+                      -- Update! We let the render thread read the old state while
+                      -- we're updating, and clobber it afterwards. Although we
+                      -- don't run it in the STM monad, the state is guaranteed
+                      -- to be read-only while we update. If this is broken, fix
+                      -- the offending code!
+                      (us', reqs) <- updateT us (realToFrac t2) is
 
-                   modifyMVar_ (loaders gs) $ \ls ->
-                        do ls' <- updateLoaders ls reqs
-                           atomically $ writeTVar (userState gs) us'
-                           return ls'
+                      modifyMVar_ (loaders gs) $ \ls ->
+                          do ls' <- updateLoaders ls reqs
+                             atomically $ writeTVar (userState gs) us'
+                             return ls'
 
-                   go t2
+                      go (n+1) t2
 
 -- | Runs 'chooseResources' on all available loaders.
 updateLoaders :: Loaders -> [ResourceRequest] -> IO Loaders
@@ -128,14 +130,15 @@ framePeriod :: NominalDiffTime
 framePeriod = realToFrac $ 1 % targetFramerate
 
 -- | The GLUT 'displayCallback' hook.
-display :: GameState a -> (a -> Dimensions -> Loaders -> GL ()) -> IO ()
-display gs rend = do (u, d, ls) <- modifyMVar (loaders gs) $ \ls ->
+display :: GameState a -> Window-> (a -> Dimensions -> Loaders -> GL ()) -> IO ()
+display gs w rend = do (u, d, ls) <- modifyMVar (loaders gs) $ \ls ->
                                      do ls' <- Loaders <$> (runGraphics . runDeferred $ textureL ls)
                                         (u, d) <- atomically $ do u <- readTVar $ userState gs
                                                                   d <- readTVar $ windowDims gs
                                                                   return (u, d)
                                         return (ls', (u, d, ls'))
-                     runGraphics $ rend u d ls
+                       runGraphics $ rend u d ls
+                                   >> postRedisplay (Just w)
 
 -- | The GLUT 'reshapeCallback' hook.
 reshape :: GameState a -> Size -> IO ()

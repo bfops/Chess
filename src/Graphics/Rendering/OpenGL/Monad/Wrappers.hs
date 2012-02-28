@@ -55,6 +55,7 @@ module Graphics.Rendering.OpenGL.Monad.Wrappers ( module Graphics.Rendering.Open
                                                 , OGL.currentColor
                                                 , GLUT.initialDisplayMode
                                                 , GLUT.displayCallback
+                                                , GLUT.idleCallback
                                                 , GLUT.currentWindow
                                                 , GLUT.screenSize
                                                 , GLUT.windowSize
@@ -84,6 +85,7 @@ module Graphics.Rendering.OpenGL.Monad.Wrappers ( module Graphics.Rendering.Open
                                                 , get
                                                 , ortho2D
                                                 , createWindow
+                                                , postRedisplay
                                                 -- * Logging Functions
                                                 , glDebugM
                                                 , glInfoM
@@ -262,3 +264,7 @@ glAlertM = unsafeRunOnGraphicsCard .: alertM
 glEmergencyM :: String -> String -> GL ()
 glEmergencyM = unsafeRunOnGraphicsCard .: emergencyM
 {-# INLINE glEmergencyM #-}
+
+postRedisplay :: Maybe GLUT.Window -> GL ()
+postRedisplay = unsafeRunOnGraphicsCard . GLUT.postRedisplay
+{-# INLINE postRedisplay #-}

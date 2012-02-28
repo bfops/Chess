@@ -205,26 +205,36 @@ testKeys is = all (testBit (keys is) . keyToIndex)
 -- | A GLUT 'keyboardMouseCallback' that should be partially applied with a
 --   shared 'InputState' variable. This will keep the state updated with the
 --   latest keyboard/mouse events.
+--
+--   We need access to a TVar with the window dimensions so that we can flip
+--   axes accordingly. Fucking useless GLUT.
 onKeyMouse :: TVar InputState
+           -> TVar Dimensions
            -> GLUT.Key
            -> GLUT.KeyState
            -> GLUT.Modifiers
            -> GLUT.Position
            -> IO ()
-onKeyMouse tis k ks ms (GLUT.Position x y) = atomically $
+onKeyMouse tis dims k ks ms (GLUT.Position x y) = atomically $
     do InputState keyboard _ <- readTVar tis
+       (_, dy)               <- readTVar dims
        let k' = gk2k k
            km' = gm2k ms
         in writeTVar tis $!! InputState
                                (updateKeyMask keyboard $ maybeToList ((,isUp ks) <$> k') ++ km')
-                               (fromIntegral x, fromIntegral y)
+                               (fromIntegral x, dy-fromIntegral y) -- flip the y-coord. Fucking GLUT.
 
 -- | A GLUT 'motionCallback' that should be partially applied with a shared
 --   'InputState' variable. This will keep the state updated with the latest
 --   mouse position.
+--
+--   We need access to a TVar with the window dimensions so that we can flip
+--   axes accordingly. Fucking useless GLUT.
 onMotion :: TVar InputState
+         -> TVar Dimensions
          -> GLUT.Position
          -> IO ()
-onMotion tis (GLUT.Position x y) = atomically $
+onMotion tis dims (GLUT.Position x y) = atomically $
     do InputState k _ <- readTVar tis
-       writeTVar tis $!! InputState k (fromIntegral x, fromIntegral y)
+       (_, dy)        <- readTVar dims
+       writeTVar tis $!! InputState k (fromIntegral x, dy-fromIntegral y) -- flip the y-coord. Fucking GLUT.
