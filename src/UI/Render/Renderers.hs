@@ -5,29 +5,35 @@ module UI.Render.Renderers ( rectangleRenderer
                            ) where
 
 import Graphics.Rendering.OpenGL.Monad as GL
+import Game.Engine
 import Game.Texture
 import UI.Colors
 import UI.Render.Core
+import Util.HashString ( HashString )
 
 renderText :: String -> String -> GL ()
 renderText _ _ = undefined
 
--- | Loads a texture, and returns a new renderer for it. NOTE: This function is
---   not thread-safe with respect to the texture cache.
+-- | Given a loader, texture name, and renderer, returns a renderer drawing
+--   the requested texture.
 --
 --   Usage:
 --
---   > coinTex <- textureRenderer "coin.png"
+--   > coinTex <- textureRenderer loader "coin.png"
 --   > updateWindow w $ coinTex { vAlign = VCenterAlign 0
 --   >                          , hAlign = HCenterAlign 0
 --   >                          , children = getCoinChildren
 --   >                          }
-textureRenderer :: Maybe Texture -> Renderer
-textureRenderer tex = case tex of
+textureRenderer :: Loaders
+                -> HashString -- ^ The name of the texture. Use OverloadedStrings.
+                -> Renderer
+textureRenderer l n = case tex of
                         Just t -> defaultRenderer { render = renderTexture t
                                                  , rendDims = (texWidth t, texHeight t)
                                                  }
                         Nothing -> rectangleRenderer 10 10 red
+    where
+        tex = getResource (textureL l) n
 
 textRenderer :: String -- ^ The name of the font we will use for rendering.
              -> String -- ^ The string we're drawing.

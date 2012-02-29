@@ -48,13 +48,41 @@ data GameState = GameState { shouldShow :: Bool -- Should the scene be rendered?
                            , rectRot :: Double -- rotation of the rectangle, in radians.
                            }
 
+chessBoard :: Loaders -> Renderer
+chessBoard l = let board = [ coord2render (x,y) `atIndex` (x,y) | x <- [0..7], y <- [0..7] ]
+                in defaultRenderer { children = board, rendDims = (dx*8, dy*8) }
+    where
+        w, b :: Renderer
+        w = textureRenderer l "chess-square-w.png"
+        b = textureRenderer l "chess-square-b.png"
+
+        idx2pos :: Coord -> Coord
+        idx2pos (x, y) = (dx*x, dy*y)
+
+        coord2render :: Coord -> Renderer
+        coord2render (x, y) |     evenx &&     eveny = w
+                            |     evenx && not eveny = b
+                            | not evenx && not eveny = w
+                            | not evenx &&     eveny = b
+                            | otherwise = error "wat." -- GHC Bug. Emits a warning for non-exhaustive pattern.
+            where
+                evenx = even x
+                eveny = even y
+
+        withPosition :: Renderer -> Coord -> Renderer
+        withPosition r c = r { pos = Left c }
+
+        atIndex :: Renderer -> Coord -> Renderer
+        atIndex r = withPosition r . idx2pos
+
+        (dx, dy) = rendDims w
+
 display :: GameState -> Dimensions -> Loaders -> GL ()
-display gs dims ls = let tex = getResource (textureL ls) "yellow-dot.png"
-                         rect = (rectangleRenderer 200 200 red)
-                                    { pos = Left . ((subtract 100) *** (subtract 100)) $ rectPos gs
-                                    , children = [ dot ]
+display gs dims ls = let rect = (rectangleRenderer 600 600 red)
+                                    { pos = Left . ((subtract 300) *** (subtract 300)) $ rectPos gs
+                                    , children = [ board ]
                                     }
-                         dot = (textureRenderer tex)
+                         board = (chessBoard ls)
                                     { pos = Right ( HCenterAlign 0
                                                   , VCenterAlign 0
                                                   )
@@ -80,6 +108,8 @@ update gs _ is = return ( GameState { shouldShow = True,
                                       rectRot = solveNewRot (rectRot gs) is
                                     }
                         , [ Loaded [hashed|yellow-dot.png|]
+                          , Loaded [hashed|chess-square-w.png|]
+                          , Loaded [hashed|chess-square-b.png|]
                           ] )
 
 initState :: GameState

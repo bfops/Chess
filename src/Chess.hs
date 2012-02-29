@@ -50,7 +50,7 @@ movePiece board src dest = do (color, piece) <- board!src
                               guard . not . isFriendlyFire color $ board!dest
                               move board src dest piece
     where isFriendlyFire :: Color -> Tile -> Bool
-          isFriendlyFire color target = maybe False (isSameColor color) target
+          isFriendlyFire color = maybe False (isSameColor color)
           isSameColor color = (color ==) . fst
 
 step :: (Ord a, Enum a, Ord b, Enum b) => (a, b) -> (a, b) -> (a, b)

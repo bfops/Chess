@@ -180,7 +180,7 @@ K2I(WheelDown,    285)
 --   make the second value of the tuple True, otherwise, if the key is up, make
 --   it False.
 updateKeyMask :: KeyMask -> [(Key, Bool)] -> KeyMask
-updateKeyMask m ks = let (on, off) = ((map fst) *** (map fst)) . L.partition snd $ map (first keyToIndex) ks
+updateKeyMask m ks = let (on, off) = (map fst *** map fst) . L.partition snd $ map (first keyToIndex) ks
                          off' = foldl' clearBit  m   off
                       in        foldl' setBit   off' on
 

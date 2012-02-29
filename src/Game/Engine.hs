@@ -2,7 +2,7 @@
 -- | In this module, we provide a basic framework for running a game.
 module Game.Engine ( runGame
                    , Loaders ( textureL )
-                   , Dimensions
+                   , getResource
                    ) where
 
 import           Config
@@ -68,10 +68,10 @@ runGame title initState rend updateT = do runGraphics $ getArgsAndInitialize
 
                                           w <- runGraphics $ initWindow title windowDimensions
 
-                                          state <- GameState <$> (atomically $ newTVar initState)
-                                                            <*> (atomically $ newTVar windowDimensions)
-                                                            <*> (atomically $ newTVar I.empty)
-                                                            <*> (newMVar    $ Loaders emptyResourceLoader)
+                                          state <- GameState <$> atomically (newTVar initState)
+                                                            <*> atomically (newTVar windowDimensions)
+                                                            <*> atomically (newTVar I.empty)
+                                                            <*> newMVar    (Loaders emptyResourceLoader)
 
                                           runGraphics $ do displayCallback       $= display state w rend
                                                            reshapeCallback       $= Just (reshape state)
