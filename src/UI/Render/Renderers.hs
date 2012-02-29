@@ -25,7 +25,7 @@ renderText _ _ = undefined
 --   >                          , children = getCoinChildren
 --   >                          }
 textureRenderer :: Loaders
-                -> HashString -- ^ The name of the texture. Use OverloadedStrings.
+                -> HashString -- ^ The name of the texture. Use the 'hashed' quasiquoter.
                 -> Renderer
 textureRenderer l n = case tex of
                         Just t -> defaultRenderer { render = renderTexture t

@@ -53,8 +53,8 @@ chessBoard l = let board = [ coord2render (x,y) `atIndex` (x,y) | x <- [0..7], y
                 in defaultRenderer { children = board, rendDims = (dx*8, dy*8) }
     where
         w, b :: Renderer
-        w = textureRenderer l "chess-square-w.png"
-        b = textureRenderer l "chess-square-b.png"
+        w = textureRenderer l [hashed|"chess-square-w.png"|]
+        b = textureRenderer l [hashed|"chess-square-b.png"|]
 
         idx2pos :: Coord -> Coord
         idx2pos (x, y) = (dx*x, dy*y)
@@ -79,7 +79,7 @@ chessBoard l = let board = [ coord2render (x,y) `atIndex` (x,y) | x <- [0..7], y
 
 display :: GameState -> Dimensions -> Loaders -> GL ()
 display gs dims ls = let rect = (rectangleRenderer 600 600 red)
-                                    { pos = Left . ((subtract 300) *** (subtract 300)) $ rectPos gs
+                                    { pos = Left . (subtract 300 *** subtract 300) $ rectPos gs
                                     , children = [ board ]
                                     }
                          board = (chessBoard ls)
