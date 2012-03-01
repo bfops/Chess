@@ -1,4 +1,4 @@
-{-# LANGUAGE QuasiQuotes, OverloadedStrings, RecordWildCards #-}
+{-# LANGUAGE QuasiQuotes, OverloadedStrings #-}
 module Main (main) where
 
 import Chess()
