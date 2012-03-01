@@ -53,18 +53,16 @@ chessBoard l = let board = [ coord2render (x,y) `atIndex` (x,y) | x <- [0..7], y
                 in defaultRenderer { children = board, rendDims = (dx*8, dy*8) }
     where
         w, b :: Renderer
-        w = textureRenderer l [hashed|chess-square-w.png|]
-        b = textureRenderer l [hashed|chess-square-b.png|]
+        w = textureRenderer l [hashed|"chess-square-w.png"|]
+        b = textureRenderer l [hashed|"chess-square-b.png"|]
 
         idx2pos :: Coord -> Coord
         idx2pos (x, y) = (dx*x, dy*y)
 
         coord2render :: Coord -> Renderer
-        coord2render (x, y) |     evenx &&     eveny = w
-                            |     evenx && not eveny = b
-                            | not evenx && not eveny = w
-                            | not evenx &&     eveny = b
-                            | otherwise = error "wat." -- GHC Bug. Emits a warning for non-exhaustive pattern.
+        coord2render (x, y) |     evenx &&     eveny = b
+                            | not evenx && not eveny = b
+                            | otherwise              = w
             where
                 evenx = even x
                 eveny = even y
@@ -90,7 +88,7 @@ display gs dims ls = let rect = (rectangleRenderer 600 600 red)
                                     }
                       in when (shouldShow gs) $ updateWindow dims rect
 
--- | Solves for the new position of the rectangle, using w-a-s-d as movement.
+-- | Solves for the new position of the rectangle, using the mouse as movement.
 solveNewPos :: Coord -> InputState -> Coord
 solveNewPos _ is = mousePos is
 
@@ -107,9 +105,9 @@ update gs _ is = return ( GameState { shouldShow = True,
                                       rectPos = solveNewPos (rectPos gs) is,
                                       rectRot = solveNewRot (rectRot gs) is
                                     }
-                        , [ Loaded [hashed|yellow-dot.png|]
-                          , Loaded [hashed|chess-square-w.png|]
-                          , Loaded [hashed|chess-square-b.png|]
+                        , [ Loaded [hashed|"yellow-dot.png"|]
+                          , Loaded [hashed|"chess-square-w.png"|]
+                          , Loaded [hashed|"chess-square-b.png"|]
                           ] )
 
 initState :: GameState

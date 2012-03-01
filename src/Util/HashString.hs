@@ -93,7 +93,9 @@ instance Hashable HashString where
 --   except it's evaluated at compile time. Please use this function wherever
 --   possible to save a lot of wasted cycles.
 hString :: String -> Q Exp
-hString s = [| HashString $(lift . hash $ T.pack s) (fromString $(liftString s)) |]
+hString s = [| HashString $(lift . hash $ T.pack s') (fromString $(liftString s')) |]
+    where
+        s' = filter (/= '"') s
 
 -- | The 'hashed' quasiquoter lets us automatically create a 'HashString' at
 --   compile time. This saves us from having to ever has this string at
