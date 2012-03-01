@@ -4,7 +4,6 @@ module Main (main) where
 import Chess()
 import Config
 import Control.Arrow
-import Control.Monad
 import Data.List
 import Game.Input
 import Game.Engine
@@ -43,8 +42,7 @@ configLogger = do root <- getRootLogger
                   -- Set up all our custom logger levels.
                   mapM_ addLogLevel Config.customLogLevels
 
-data GameState = GameState { shouldShow :: Bool -- Should the scene be rendered?
-                           , rectPos :: Coord
+data GameState = GameState { rectPos :: Coord
                            , rectRot :: Double -- rotation of the rectangle, in radians.
                            }
 
@@ -86,7 +84,7 @@ display gs dims ls = let rect = (rectangleRenderer 600 600 red)
                                                   )
                                     , rotation = rectRot gs
                                     }
-                      in when (shouldShow gs) $ updateWindow dims rect
+                      in updateWindow dims rect
 
 -- | Solves for the new position of the rectangle, using the mouse as movement.
 solveNewPos :: Coord -> InputState -> Coord
@@ -94,15 +92,14 @@ solveNewPos _ is = mousePos is
 
 solveNewRot :: Double -> InputState -> Double
 solveNewRot r is = r + v * fromIntegral
-                        ((fromEnum $ testKeys is [ KeyChar 'z' ])
-                       - (fromEnum $ testKeys is [ KeyChar 'x' ]))
+                        ((fromEnum $ testKeys is [ LeftButton  ])
+                       - (fromEnum $ testKeys is [ RightButton ]))
     where
         v = 0.05 -- velocity
 
 -- | We don't do anything... for now.
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest])
-update gs _ is = return ( GameState { shouldShow = True,
-                                      rectPos = solveNewPos (rectPos gs) is,
+update gs _ is = return ( GameState { rectPos = solveNewPos (rectPos gs) is,
                                       rectRot = solveNewRot (rectRot gs) is
                                     }
                         , [ Loaded [hashed|"yellow-dot.png"|]
@@ -111,7 +108,7 @@ update gs _ is = return ( GameState { shouldShow = True,
                           ] )
 
 initState :: GameState
-initState = GameState False (100, 100) 0
+initState = GameState (100, 100) 0
 
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.
