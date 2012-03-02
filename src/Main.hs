@@ -51,8 +51,6 @@ data GameState = GameState { rectPos :: Coord
                            }
 
 -- Get the filename of the texture to load for this piece.
---
--- TODO: Memoize!
 fileString :: Game.Logic.Color -> Piece -> HashString
 fileString c p = toHashString $ "piece-" ++ (colorString c) ++ "-" ++ (pieceString p) ++ ".png"
     where colorString White = "w"
@@ -64,6 +62,10 @@ fileString c p = toHashString $ "piece-" ++ (colorString c) ++ "-" ++ (pieceStri
           pieceString Bishop = "b"
           pieceString Queen = "q"
           pieceString King = "k"
+
+-- Prevents recomputation of our piece hashstrings.
+allPieces :: [HashString]
+allPieces = [ fileString c p | c <- [White, Black] , p <- [Pawn .. King] ]
 
 chessBoard :: Loaders -> Board -> Renderer
 chessBoard l gameBoard = let renderBoard = [ tileRender (x,y) | x <- [0..7], y <- [0..7] ]
@@ -159,10 +161,7 @@ update gs _ is = let gs'  = maybe gs id (considerMovement gs is)
                               , Loaded [hashed|"chess-square-w.png"|]
                               , Loaded [hashed|"chess-square-b.png"|]
                               ]
-                              ++ map Loaded [ fileString c p
-                                           | c <- [White, Black]
-                                           , p <- [Pawn .. King]
-                                           ]
+                              ++ map Loaded allPieces
                             , display gs''
                             )
 
