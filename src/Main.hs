@@ -169,8 +169,7 @@ update gs !t is = let gs'  = maybe gs id (considerMovement gs is)
                                  , rectRot = solveNewRot (rectRot gs) dt is
                                  }
                    in return $!! ( gs''
-                                 , [ Loaded [hashed|"yellow-dot.png"|]
-                                   , Loaded [hashed|"chess-square-w.png"|]
+                                 , [ Loaded [hashed|"chess-square-w.png"|]
                                    , Loaded [hashed|"chess-square-b.png"|]
                                  ] ++ map Loaded allPieces
                                  , display gs''

@@ -14,7 +14,7 @@ Extra-Source-Files:  assets/*.png
 Executable Chess
     hs-source-dirs:    src/
     Main-is:           Main.hs
-    GHC-Options:       -Wall -threaded -rtsopts=all -funbox-strict-fields -fllvm -fno-warn-orphans
+    GHC-Options:       -Wall -threaded -rtsopts=all -fllvm -fno-warn-orphans
     Extensions:        UnboxedTuples
     Other-Modules:     Paths_Chess
 
