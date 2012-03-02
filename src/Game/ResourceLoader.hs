@@ -217,7 +217,7 @@ chooseResources :: (LoadableResource i r, NFData i, NFData r)
                 -- ^ A new resource loader, with all the required textures in
                 --   place.
 chooseResources rl reqs = do (reqs', rl') <- solveExistingResources reqs rl
-                             newlyLoaded <- syncLoad $ syncRequests reqs'
+                             newlyLoaded <- syncLoad  $ syncRequests reqs'
                              asyncLoaded <- asyncLoad $ asyncRequests reqs'
                              return $!! ResourceLoader (loaded rl')
                                                        (deferred  rl' `insertListM` newlyLoaded)
