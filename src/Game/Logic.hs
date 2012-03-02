@@ -13,10 +13,11 @@ module Game.Logic ( Color(..)
                   , hasEmptyPath
                   ) where
 
+import Control.DeepSeq
+import Control.Monad
 import Data.Array.IArray
 import Data.Maybe
 import Data.List
-import Control.Monad
 
 class (Enum a, Bounded a, Eq a) => Cycle a where
     next :: a -> a
@@ -31,10 +32,13 @@ class (Enum a, Bounded a, Eq a) => Cycle a where
 data Color = White | Black
     deriving (Eq, Show, Enum, Bounded)
 
+instance NFData Color
 instance Cycle Color
 
 data Piece = Pawn | Rook | Knight | Bishop | Queen | King
     deriving (Enum, Eq, Ord, Show)
+
+instance NFData Piece
 
 type File = Char
 type Rank = Int

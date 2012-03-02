@@ -3,6 +3,7 @@ module Main (main) where
 
 import Config
 import Control.Arrow
+import Control.DeepSeq
 import Data.Array
 import Data.List
 import Game.Input
@@ -49,6 +50,14 @@ data GameState = GameState { rectPos :: Coord
                                                      -- they've selected the one here.
                            , turn :: Game.Logic.Color -- whose turn is it?
                            }
+
+instance NFData GameState where
+    rnf gs = rnf (rectPos gs) `seq`
+             rnf (rectRot gs) `seq`
+             rnf (board   gs) `seq`
+             rnf (mvSrc   gs) `seq`
+             rnf (turn    gs) `seq`
+             ()
 
 -- Get the filename of the texture to load for this piece.
 fileString :: Game.Logic.Color -> Piece -> HashString
@@ -123,7 +132,7 @@ solveNewRot r is = r + v * fromIntegral
                         ((fromEnum $ testKeys is [ LeftButton  ])
                        - (fromEnum $ testKeys is [ RightButton ]))
     where
-        v = 0.05 -- velocity
+        v = 0.08 -- velocity
 
 considerMovement :: GameState -> InputState -> Maybe GameState
 considerMovement gs is = do tile <- clickCoords
@@ -156,14 +165,13 @@ update gs _ is = let gs'  = maybe gs id (considerMovement gs is)
                      gs'' = gs' { rectPos = solveNewPos (rectPos gs) is
                                 , rectRot = solveNewRot (rectRot gs) is
                                 }
-                  in return ( gs''
-                            , [ Loaded [hashed|"yellow-dot.png"|]
-                              , Loaded [hashed|"chess-square-w.png"|]
-                              , Loaded [hashed|"chess-square-b.png"|]
-                              ]
-                              ++ map Loaded allPieces
-                            , display gs''
-                            )
+                  in return $!! ( gs''
+                                , [ Loaded [hashed|"yellow-dot.png"|]
+                                  , Loaded [hashed|"chess-square-w.png"|]
+                                  , Loaded [hashed|"chess-square-b.png"|]
+                                ] ++ map Loaded allPieces
+                                , display gs''
+                                )
 
 initState :: GameState
 initState = GameState (400, 300) 0 initBoard Nothing White

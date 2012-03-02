@@ -46,7 +46,7 @@ texturePrefix = "assets"
 
 -- | The number of times per second to run the update loop.
 targetFramerate :: Int
-targetFramerate = 120
+targetFramerate = 60
 
 -- | The (x, y) dimensions of the screen. Eventually, this should be dynamic,
 --   and full screen should be supported. Until then though, we have this
