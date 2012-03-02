@@ -1,4 +1,4 @@
-{-# LANGUAGE TupleSections, FlexibleInstances #-}
+{-# LANGUAGE TupleSections #-}
 module Game.Logic ( Color(..)
                   , Piece(..)
                   , File
