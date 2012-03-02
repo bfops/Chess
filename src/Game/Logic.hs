@@ -17,6 +17,7 @@ import Control.Arrow
 import Control.DeepSeq
 import Control.Monad
 import Data.Array.IArray
+import Data.Function
 import Data.Maybe
 import Data.List
 
@@ -45,11 +46,13 @@ instance Enum Piece where
     succ Knight = Bishop
     succ Bishop = Queen
     succ Queen = King
+    succ King = undefined
     pred King = Queen
     pred Queen = Bishop
     pred Bishop = Knight
     pred Knight = Rook
     pred Rook = Pawn False
+    pred (Pawn _) = undefined
     fromEnum (Pawn _) = 0
     fromEnum Rook = 1
     fromEnum Knight = 2
@@ -122,7 +125,7 @@ hasEmptyPath board origin dest = all isNothing $ map (board!) path
                            else Just (step pos dest, step pos dest)
 
 delta :: Position -> Position -> (Int, Int)
-delta = flip $ tupleApply (\x y -> (fromEnum x) - (fromEnum y)) (-)
+delta = flip $ tupleApply ((-) `on` fromEnum) (-)
 
 -- Just moves the piece, no checking.
 makeMove :: Board -> Position -> Position -> Board
@@ -144,6 +147,7 @@ tryMove board src dest (Pawn True) = if (second (flipIfBlack $ board!src) $ delt
                                      else pawnTake board src dest
     where flipIfBlack (Just (White, _)) = id
           flipIfBlack (Just (Black, _)) = negate
+          flipIfBlack Nothing           = id
 
 tryMove board src dest _ = Just $ makeMove board src dest
 
