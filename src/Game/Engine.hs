@@ -19,6 +19,7 @@ import           Data.Time.Clock
 import           Data.Time.Clock.POSIX
 
 import Game.Input as I
+import Game.Render.Core
 import Game.ResourceLoader
 import Game.Texture
 
@@ -28,8 +29,6 @@ import           Graphics.UI.GLUT ( Position(..)
                                   )
 
 import System.Log.Logger
-
-import UI.Render.Core
 
 import Util.Defs
 

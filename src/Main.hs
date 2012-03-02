@@ -6,17 +6,17 @@ import Control.Arrow
 import Control.DeepSeq
 import Data.Array
 import Data.List
-import Game.Input
 import Game.Engine
+import Game.Input
 import Game.Logic
+import Game.Render
+import Game.Render.Colors
 import Game.ResourceLoader
 import System.IO (stderr)
 import System.Log.Formatter
 import System.Log.Handler as H
 import System.Log.Handler.Simple
 import System.Log.Logger as L
-import UI.Colors
-import UI.Render
 import Util.Defs
 import Util.HashString
 
