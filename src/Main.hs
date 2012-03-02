@@ -1,12 +1,13 @@
 {-# LANGUAGE QuasiQuotes, OverloadedStrings #-}
 module Main (main) where
 
-import Chess()
 import Config
 import Control.Arrow
+import Data.Array
 import Data.List
 import Game.Input
 import Game.Engine
+import Game.Logic
 import Game.ResourceLoader
 import Graphics.Rendering.OpenGL.Monad as GL
 import System.IO (stderr)
@@ -44,11 +45,25 @@ configLogger = do root <- getRootLogger
 
 data GameState = GameState { rectPos :: Coord
                            , rectRot :: Double -- rotation of the rectangle, in radians.
+                           , board :: Board
                            }
 
-chessBoard :: Loaders -> Renderer
-chessBoard l = let board = [ coord2render (x,y) `atIndex` (x,y) | x <- [0..7], y <- [0..7] ]
-                in defaultRenderer { children = board, rendDims = (dx*8, dy*8) }
+-- Get the filename of the texture to load for this piece.
+fileString :: Game.Logic.Color -> Piece -> String
+fileString c p = "piece-" ++ (colorString c) ++ "-" ++ (pieceString p) ++ ".png"
+    where colorString White = "w"
+          colorString Black = "b"
+
+          pieceString Pawn = "p"
+          pieceString Rook = "r"
+          pieceString Knight = "n"
+          pieceString Bishop = "b"
+          pieceString Queen = "q"
+          pieceString King = "k"
+
+chessBoard :: Loaders -> Board -> Renderer
+chessBoard l gameBoard = let renderBoard = [ tileRender (x,y) | x <- [0..7], y <- [0..7] ]
+                      in defaultRenderer { children = renderBoard, rendDims = (dx*8, dy*8) }
     where
         w, b :: Renderer
         w = textureRenderer l [hashed|"chess-square-w.png"|]
@@ -57,13 +72,16 @@ chessBoard l = let board = [ coord2render (x,y) `atIndex` (x,y) | x <- [0..7], y
         idx2pos :: Coord -> Coord
         idx2pos (x, y) = (dx*x, dy*y)
 
-        coord2render :: Coord -> Renderer
-        coord2render (x, y) |     evenx &&     eveny = b
-                            | not evenx && not eveny = b
-                            | otherwise              = w
-            where
-                evenx = even x
-                eveny = even y
+        tileRender :: Coord -> Renderer
+        tileRender p@(x, y) = checkerRender p `atIndex` p `withChildren` (pieceRender $ gameBoard!(toEnum $ x + 65, y + 1))
+            where checkerRender (x, y) |     evenx &&     eveny = b
+                                       | not evenx && not eveny = b
+                                       | otherwise              = w
+                  evenx = even x
+                  eveny = even y
+                  pieceRender Nothing = []
+                  pieceRender (Just (c, p)) = [(textureRenderer l $ toHashString $ fileString c p)
+                                                { pos = Right (HCenterAlign 0, VCenterAlign 0) }]
 
         withPosition :: Renderer -> Coord -> Renderer
         withPosition r c = r { pos = Left c }
@@ -71,19 +89,22 @@ chessBoard l = let board = [ coord2render (x,y) `atIndex` (x,y) | x <- [0..7], y
         atIndex :: Renderer -> Coord -> Renderer
         atIndex r = withPosition r . idx2pos
 
+        withChildren :: Renderer -> [Renderer] -> Renderer
+        withChildren r c = r { children = c }
+
         (dx, dy) = rendDims w
 
 display :: GameState -> Dimensions -> Loaders -> GL ()
 display gs dims ls = let rect = (rectangleRenderer 600 600 red)
                                     { pos = Left . (subtract 300 *** subtract 300) $ rectPos gs
-                                    , children = [ board ]
+                                    , children = [ boardRender ]
                                     }
-                         board = (chessBoard ls)
-                                    { pos = Right ( HCenterAlign 0
-                                                  , VCenterAlign 0
-                                                  )
-                                    , rotation = rectRot gs
-                                    }
+                         boardRender = (chessBoard ls $ board gs)
+                                        { pos = Right ( HCenterAlign 0
+                                                      , VCenterAlign 0
+                                                      )
+                                        , rotation = rectRot gs
+                                        }
                       in updateWindow dims rect
 
 -- | Solves for the new position of the rectangle, using the mouse as movement.
@@ -99,16 +120,18 @@ solveNewRot r is = r + v * fromIntegral
 
 -- | We don't do anything... for now.
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest])
-update gs _ is = return ( GameState { rectPos = solveNewPos (rectPos gs) is,
-                                      rectRot = solveNewRot (rectRot gs) is
-                                    }
+update gs _ is = return ( gs { rectPos = solveNewPos (rectPos gs) is,
+                               rectRot = solveNewRot (rectRot gs) is
+                             }
                         , [ Loaded [hashed|"yellow-dot.png"|]
                           , Loaded [hashed|"chess-square-w.png"|]
                           , Loaded [hashed|"chess-square-b.png"|]
-                          ] )
+                          ]
+                        ++ map (Loaded . toHashString) [fileString c p | c <- [White, Black], p <- [Pawn .. King]]
+                        )
 
 initState :: GameState
-initState = GameState (100, 100) 0
+initState = GameState (100, 100) 0 initBoard
 
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.

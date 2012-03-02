@@ -92,7 +92,6 @@ runUpdateLoop gs updateT = getPOSIXTime >>= go 0
         --   frame #        t1
         go :: Integer -> NominalDiffTime -> IO ()
         go !n t1 = do t2 <- waitFor (t1 + framePeriod)
- 
                       us <- atomically . readTVar $ userState gs
                       is <- atomically . readTVar $ inputSt gs
 
@@ -102,7 +101,6 @@ runUpdateLoop gs updateT = getPOSIXTime >>= go 0
                       -- to be read-only while we update. If this is broken, fix
                       -- the offending code!
                       (us', reqs) <- updateT us (realToFrac t2) is
-
                       modifyMVar_ (loaders gs) $ \ls ->
                           do ls' <- updateLoaders ls reqs
                              atomically $ writeTVar (userState gs) us'
