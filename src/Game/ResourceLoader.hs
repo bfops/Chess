@@ -133,8 +133,8 @@ solveExistingResources urs rl = do d'' <- d'
                 -- Returns false if the given request is a Preload request, and
                 -- already exists as a load request in the given set.
                 noDups :: S.HashSet ResourceRequest -> ResourceRequest -> Bool
+                noDups _ (Loaded   _ ) = True
                 noDups s (Preload rid) = not $ S.member (Loaded rid) s
-                noDups _       _       = True
 
         -- Requests are only valid if they don't exist in one of the existing
         -- texture maps.
@@ -153,12 +153,12 @@ solveExistingResources urs rl = do d'' <- d'
         -- A texture is loaded if its a requested resource and in the existing
         -- loaded map, or exists in the preloaded map as a texture.
         --
-        -- O(n) - 2 sync passes.
-        l' = L.foldl' addIfLoaded (L.foldl' addIfPreloaded M.empty sync) sync
+        -- O(n) - 1 sync pass.
+        l' = uncurry (L.foldl' addIfPreloaded) $ L.foldl' addIfLoaded (M.empty, []) sync
             where
-                addIfLoaded m req = case M.lookup req l of
-                                       Just tex -> M.insert req tex m
-                                       Nothing  -> m
+                addIfLoaded (m, xs) req = case M.lookup req l of
+                                            Just tex -> (M.insert req tex m, xs)
+                                            Nothing  -> (m, req:xs)
                 addIfPreloaded m req = case M.lookup req p of
                                           Just (FullyLoaded tex) -> M.insert req tex m
                                           _                      -> m
@@ -184,8 +184,7 @@ solveExistingResources urs rl = do d'' <- d'
 
         -- A texture is preloaded if it has been requested as one, and is either
         -- already in 'loaded' or 'preloaded'.
-        p' = let (m, xs) = L.foldl' fromPreloaded (M.empty, []) async
-              in L.foldl' fromLoaded m xs
+        p' = uncurry (L.foldl' fromLoaded) $ L.foldl' fromPreloaded (M.empty, []) async
             where
                 fromLoaded m req = case M.lookup req l of
                                       Just tex -> M.insert req (FullyLoaded tex) m

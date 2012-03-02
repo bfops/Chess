@@ -1,4 +1,4 @@
-{-# LANGUAGE QuasiQuotes, OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes, OverloadedStrings, BangPatterns #-}
 module Main (main) where
 
 import Config
@@ -43,12 +43,13 @@ configLogger = do root <- getRootLogger
                   -- Set up all our custom logger levels.
                   mapM_ addLogLevel Config.customLogLevels
 
-data GameState = GameState { rectPos :: Coord
+data GameState = GameState { t0      :: !Double -- the time value of the last frame.
+                           , rectPos :: Coord
                            , rectRot :: Double -- rotation of the rectangle, in radians.
-                           , board :: Board
-                           , mvSrc :: Maybe Position -- if the user's selected a piece to move,
-                                                     -- they've selected the one here.
-                           , turn :: Game.Logic.Color -- whose turn is it?
+                           , board   :: Board
+                           , mvSrc   :: Maybe Position -- if the user's selected a piece to move,
+                                                      -- they've selected the one here.
+                           , turn    :: Game.Logic.Color -- whose turn is it?
                            }
 
 instance NFData GameState where
@@ -123,16 +124,17 @@ display gs ls = let rect = (rectangleRenderer 600 600 red)
                                 }
                  in rect
 
--- | Solves for the new position of the rectangle, using the mouse as movement.
+{-
 solveNewPos :: Coord -> InputState -> Coord
 solveNewPos _ = mousePos
 
-solveNewRot :: Double -> InputState -> Double
-solveNewRot r is = r + v * fromIntegral
-                        ((fromEnum $ testKeys is [ LeftButton  ])
-                       - (fromEnum $ testKeys is [ RightButton ]))
+solveNewRot :: Double -> Double -> InputState -> Double
+solveNewRot r dt is = r + v*dt * fromIntegral
+                                 ((fromEnum $ testKeys is [ LeftButton  ])
+                                - (fromEnum $ testKeys is [ RightButton ]))
     where
-        v = 0.08 -- velocity
+        v = 1 -- velocity
+-}
 
 considerMovement :: GameState -> InputState -> Maybe GameState
 considerMovement gs is = do tile <- clickCoords
@@ -161,20 +163,27 @@ considerMovement gs is = do tile <- clickCoords
 
 -- | We don't do anything... for now.
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Loaders -> Renderer)
-update gs _ is = let gs'  = maybe gs id (considerMovement gs is)
-                     gs'' = gs' { rectPos = solveNewPos (rectPos gs) is
-                                , rectRot = solveNewRot (rectRot gs) is
-                                }
-                  in return $!! ( gs''
-                                , [ Loaded [hashed|"yellow-dot.png"|]
-                                  , Loaded [hashed|"chess-square-w.png"|]
-                                  , Loaded [hashed|"chess-square-b.png"|]
-                                ] ++ map Loaded allPieces
-                                , display gs''
-                                )
+update gs !t is = let gs'  = maybe gs id (considerMovement gs is)
+                      gs'' = gs' { t0 = t
+                                 --, rectPos = solveNewPos (rectPos gs) is
+                                 --, rectRot = solveNewRot (rectRot gs) dt is
+                                 }
+                   in return $!! ( gs''
+                                 , [ Loaded [hashed|"yellow-dot.png"|]
+                                   , Loaded [hashed|"chess-square-w.png"|]
+                                   , Loaded [hashed|"chess-square-b.png"|]
+                                 ] ++ map Loaded allPieces
+                                 , display gs''
+                                 )
+    where
+        dt | g0 > 0 = t - g0
+           | g0 == 0 = 0 -- only happens on the first update.
+           | otherwise = error $ "So apparently, we have a time value less than 0: " ++ show g0
+            where
+                g0 = t0 gs
 
 initState :: GameState
-initState = GameState (400, 300) 0 initBoard Nothing White
+initState = GameState 0 (400, 300) 0 initBoard Nothing White
 
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.
