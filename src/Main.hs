@@ -46,6 +46,9 @@ configLogger = do root <- getRootLogger
 data GameState = GameState { rectPos :: Coord
                            , rectRot :: Double -- rotation of the rectangle, in radians.
                            , board :: Board
+                           , mvSrc :: Maybe Position -- if the user's selected a piece to move,
+                                                     -- they've selected the one here.
+                           , turn :: Game.Logic.Color -- whose turn is it?
                            }
 
 -- Get the filename of the texture to load for this piece.
@@ -73,10 +76,10 @@ chessBoard l gameBoard = let renderBoard = [ tileRender (x,y) | x <- [0..7], y <
         idx2pos (x, y) = (dx*x, dy*y)
 
         tileRender :: Coord -> Renderer
-        tileRender p@(x, y) = checkerRender p `atIndex` p `withChildren` (pieceRender $ gameBoard!(toEnum $ x + 65, y + 1))
-            where checkerRender (x, y) |     evenx &&     eveny = b
-                                       | not evenx && not eveny = b
-                                       | otherwise              = w
+        tileRender p@(x, y) = checkerRender `atIndex` p `withChildren` (pieceRender $ gameBoard!(toEnum $ x + 65, y + 1))
+            where checkerRender |     evenx &&     eveny = b
+                                | not evenx && not eveny = b
+                                | otherwise              = w
                   evenx = even x
                   eveny = even y
                   pieceRender Nothing = []
@@ -109,7 +112,7 @@ display gs dims ls = let rect = (rectangleRenderer 600 600 red)
 
 -- | Solves for the new position of the rectangle, using the mouse as movement.
 solveNewPos :: Coord -> InputState -> Coord
-solveNewPos _ is = mousePos is
+solveNewPos _ = mousePos
 
 solveNewRot :: Double -> InputState -> Double
 solveNewRot r is = r + v * fromIntegral
@@ -118,11 +121,34 @@ solveNewRot r is = r + v * fromIntegral
     where
         v = 0.05 -- velocity
 
+considerMovement :: GameState -> InputState -> Maybe GameState
+considerMovement gs is = do tile <- clickCoords
+                            case mvSrc gs of
+                                Nothing -> select tile
+                                Just src -> src `moveTo` tile
+
+    where clickCoords = if testKeys is [ LeftButton ]
+                        then let (x, y) = mousePos is
+                             in if x >= 144 && x < 800 - 144
+                                && y >=  44 && y < 600 -  44
+                                 then Just (toEnum $ (x - 144) `div` 64 + 65,
+                                            toEnum $ (y -  44) `div` 64 + 1)
+                                 else Nothing
+                        else Nothing
+
+          select tile = (board gs)!tile >>= \(color, _) -> if turn gs == color
+                                                           then Just $ gs { mvSrc = Just tile }
+                                                           else Nothing
+
+          moveTo src tile = do gameBoard <- move (board gs) src tile
+                               return $ gs { mvSrc = Nothing
+                                           , board = gameBoard
+                                           , turn = next $ turn gs
+                                           }
+
 -- | We don't do anything... for now.
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest])
-update gs _ is = return ( gs { rectPos = solveNewPos (rectPos gs) is,
-                               rectRot = solveNewRot (rectRot gs) is
-                             }
+update gs _ is = return ( maybe gs id (considerMovement gs is)
                         , [ Loaded [hashed|"yellow-dot.png"|]
                           , Loaded [hashed|"chess-square-w.png"|]
                           , Loaded [hashed|"chess-square-b.png"|]
@@ -131,7 +157,7 @@ update gs _ is = return ( gs { rectPos = solveNewPos (rectPos gs) is,
                         )
 
 initState :: GameState
-initState = GameState (100, 100) 0 initBoard
+initState = GameState (400, 300) 0 initBoard Nothing White
 
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.
