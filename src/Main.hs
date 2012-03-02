@@ -1,12 +1,13 @@
 {-# LANGUAGE QuasiQuotes, OverloadedStrings #-}
 module Main (main) where
 
-import Chess()
 import Config
 import Control.Arrow
+import Data.Array
 import Data.List
 import Game.Input
 import Game.Engine
+import Game.Logic
 import Game.ResourceLoader
 import System.IO (stderr)
 import System.Log.Formatter
@@ -43,11 +44,30 @@ configLogger = do root <- getRootLogger
 
 data GameState = GameState { rectPos :: Coord
                            , rectRot :: Double -- rotation of the rectangle, in radians.
+                           , board :: Board
+                           , mvSrc :: Maybe Position -- if the user's selected a piece to move,
+                                                     -- they've selected the one here.
+                           , turn :: Game.Logic.Color -- whose turn is it?
                            }
 
-chessBoard :: Loaders -> Renderer
-chessBoard l = let board = [ coord2render (x,y) `atIndex` (x,y) | x <- [0..7], y <- [0..7] ]
-                in defaultRenderer { children = board, rendDims = (dx*8, dy*8) }
+-- Get the filename of the texture to load for this piece.
+--
+-- TODO: Memoize!
+fileString :: Game.Logic.Color -> Piece -> HashString
+fileString c p = toHashString $ "piece-" ++ (colorString c) ++ "-" ++ (pieceString p) ++ ".png"
+    where colorString White = "w"
+          colorString Black = "b"
+
+          pieceString Pawn = "p"
+          pieceString Rook = "r"
+          pieceString Knight = "n"
+          pieceString Bishop = "b"
+          pieceString Queen = "q"
+          pieceString King = "k"
+
+chessBoard :: Loaders -> Board -> Renderer
+chessBoard l gameBoard = let renderBoard = [ tileRender (x,y) | x <- [0..7], y <- [0..7] ]
+                          in defaultRenderer { children = renderBoard, rendDims = (dx*8, dy*8) }
     where
         w, b :: Renderer
         w = textureRenderer l [hashed|"chess-square-w.png"|]
@@ -56,13 +76,17 @@ chessBoard l = let board = [ coord2render (x,y) `atIndex` (x,y) | x <- [0..7], y
         idx2pos :: Coord -> Coord
         idx2pos (x, y) = (dx*x, dy*y)
 
-        coord2render :: Coord -> Renderer
-        coord2render (x, y) |     evenx &&     eveny = b
-                            | not evenx && not eveny = b
-                            | otherwise              = w
-            where
-                evenx = even x
-                eveny = even y
+        tileRender :: Coord -> Renderer
+        tileRender p@(x, y) = checkerRender `atIndex` p
+                                            `withChildren` (pieceRender $ gameBoard!(toEnum $ x + 65, y + 1))
+            where checkerRender |     evenx &&     eveny = b
+                                | not evenx && not eveny = b
+                                | otherwise              = w
+                  evenx = even x
+                  eveny = even y
+                  pieceRender Nothing = []
+                  pieceRender (Just (c, pce)) = [(textureRenderer l $ fileString c pce)
+                                                    { pos = Right (HCenterAlign 0, VCenterAlign 0) }]
 
         withPosition :: Renderer -> Coord -> Renderer
         withPosition r c = r { pos = Left c }
@@ -70,14 +94,17 @@ chessBoard l = let board = [ coord2render (x,y) `atIndex` (x,y) | x <- [0..7], y
         atIndex :: Renderer -> Coord -> Renderer
         atIndex r = withPosition r . idx2pos
 
+        withChildren :: Renderer -> [Renderer] -> Renderer
+        withChildren r c = r { children = c }
+
         (dx, dy) = rendDims w
 
 display :: GameState -> Loaders -> Renderer
 display gs ls = let rect = (rectangleRenderer 600 600 red)
                                 { pos = Left . (subtract 300 *** subtract 300) $ rectPos gs
-                                , children = [ board ]
+                                , children = [ boardRender ]
                                 }
-                    board = (chessBoard ls)
+                    boardRender = (chessBoard ls $ board gs)
                                 { pos = Right ( HCenterAlign 0
                                               , VCenterAlign 0
                                               )
@@ -87,7 +114,7 @@ display gs ls = let rect = (rectangleRenderer 600 600 red)
 
 -- | Solves for the new position of the rectangle, using the mouse as movement.
 solveNewPos :: Coord -> InputState -> Coord
-solveNewPos _ is = mousePos is
+solveNewPos _ = mousePos
 
 solveNewRot :: Double -> InputState -> Double
 solveNewRot r is = r + v * fromIntegral
@@ -96,21 +123,51 @@ solveNewRot r is = r + v * fromIntegral
     where
         v = 0.05 -- velocity
 
+considerMovement :: GameState -> InputState -> Maybe GameState
+considerMovement gs is = do tile <- clickCoords
+                            case mvSrc gs of
+                                Nothing -> select tile
+                                Just src -> src `moveTo` tile
+
+    where clickCoords = if testKeys is [ LeftButton ]
+                        then let (x, y) = mousePos is
+                             in if x >= 144 && x < 800 - 144
+                                && y >=  44 && y < 600 -  44
+                                 then Just (toEnum $ (x - 144) `div` 64 + 65,
+                                            toEnum $ (y -  44) `div` 64 + 1)
+                                 else Nothing
+                        else Nothing
+
+          select tile = (board gs)!tile >>= \(color, _) -> if turn gs == color
+                                                           then Just $ gs { mvSrc = Just tile }
+                                                           else Nothing
+
+          moveTo src tile = do gameBoard <- move (board gs) src tile
+                               return $ gs { mvSrc = Nothing
+                                           , board = gameBoard
+                                           , turn = next $ turn gs
+                                           }
+
 -- | We don't do anything... for now.
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Loaders -> Renderer)
-update gs _ is = let gs' = GameState { rectPos = solveNewPos (rectPos gs) is
-                                     , rectRot = solveNewRot (rectRot gs) is
-                                     }
-                  in return ( gs'
+update gs _ is = let gs'  = maybe gs id (considerMovement gs is)
+                     gs'' = gs' { rectPos = solveNewPos (rectPos gs) is
+                                , rectRot = solveNewRot (rectRot gs) is
+                                }
+                  in return ( gs''
                             , [ Loaded [hashed|"yellow-dot.png"|]
                               , Loaded [hashed|"chess-square-w.png"|]
                               , Loaded [hashed|"chess-square-b.png"|]
                               ]
-                            , display gs'
+                              ++ map Loaded [ fileString c p
+                                           | c <- [White, Black]
+                                           , p <- [Pawn .. King]
+                                           ]
+                            , display gs''
                             )
 
 initState :: GameState
-initState = GameState (100, 100) 0
+initState = GameState (400, 300) 0 initBoard Nothing White
 
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.
