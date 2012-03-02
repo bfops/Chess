@@ -18,11 +18,11 @@ import qualified Data.Conduit.List            as C
 import           Data.Hashable
 import qualified Data.HashMap.Strict          as M
 import qualified Data.HashSet                 as S
+import           Data.HashString
 import           Data.List                    as L
 import           Data.Maybe
 import qualified Data.Text                    as T
 import           Graphics.Rendering.OpenGL.Monad
-import           Util.HashString
 
 -- | A resource request is used to signify that the following resource is
 --   required to render the current frame. A resource will begin loading when
@@ -58,8 +58,8 @@ class LoadableResource i r | i -> r, r -> i where
     fromDisk   :: T.Text -> IO (Maybe i)
 
     -- | Uploads a RAM-loaded resource onto the graphics card. If no such
-    --   upload is needed, set the body of this function to @return . map id@,
-    --   and make sure that 'IntermediateRepr' is the same as 'r'.
+    --   upload is needed, set the body of this function to @return@,
+    --   and make sure that 'i' is the same as 'r'.
     toGraphics :: [i] -> GL [r]
 
 -- | The 'ResourceLoader' keeps track of all resources currently loaded in

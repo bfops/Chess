@@ -1,15 +1,15 @@
 {-# LANGUAGE RankNTypes #-}
-module UI.Render.Renderers ( rectangleRenderer
-                           , textureRenderer
-                           , textRenderer
-                           ) where
+module Game.Render.Renderers ( rectangleRenderer
+                             , textureRenderer
+                             , textRenderer
+                             ) where
 
+import Data.HashString ( HashString )
 import Graphics.Rendering.OpenGL.Monad as GL
 import Game.Engine
 import Game.Texture
-import UI.Colors
-import UI.Render.Core
-import Util.HashString ( HashString )
+import Game.Render.Colors
+import Game.Render.Core
 
 renderText :: String -> String -> GL ()
 renderText _ _ = undefined

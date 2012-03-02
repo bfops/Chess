@@ -5,20 +5,20 @@ import Config
 import Control.Arrow
 import Control.DeepSeq
 import Data.Array
+import Data.HashString
 import Data.List
-import Game.Input
 import Game.Engine
+import Game.Input
 import Game.Logic
+import Game.Render
+import Game.Render.Colors
 import Game.ResourceLoader
 import System.IO (stderr)
 import System.Log.Formatter
 import System.Log.Handler as H
 import System.Log.Handler.Simple
 import System.Log.Logger as L
-import UI.Colors
-import UI.Render
 import Util.Defs
-import Util.HashString
 
 -- | Initializes all the loggers' states to what was defined in the config file.
 configLogger :: IO ()
@@ -169,8 +169,7 @@ update gs !t is = let gs'  = maybe gs id (considerMovement gs is)
                                  , rectRot = solveNewRot (rectRot gs) dt is
                                  }
                    in return $!! ( gs''
-                                 , [ Loaded [hashed|"yellow-dot.png"|]
-                                   , Loaded [hashed|"chess-square-w.png"|]
+                                 , [ Loaded [hashed|"chess-square-w.png"|]
                                    , Loaded [hashed|"chess-square-b.png"|]
                                  ] ++ map Loaded allPieces
                                  , display gs''

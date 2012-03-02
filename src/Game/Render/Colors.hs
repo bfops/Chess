@@ -4,7 +4,7 @@
 --   of green that need consolidating.
 --
 --   Okay, the holocaust. The holocaust was worse.
-module UI.Colors where
+module Game.Render.Colors where
 -- No explicit export list. Just export everything.
 
 import Graphics.Rendering.OpenGL.GL as GL

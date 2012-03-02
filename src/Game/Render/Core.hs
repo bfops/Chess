@@ -3,13 +3,13 @@
 --
 --   The fundamental data type is the 'Renderer', which is declared in a
 --   hierarchical fashion.
-module UI.Render.Core ( Renderer(..)
-                      , Offset
-                      , defaultRenderer
-                      , updateWindow
-                      , HAlign(..)
-                      , VAlign(..)
-                      ) where
+module Game.Render.Core ( Renderer(..)
+                        , Offset
+                        , defaultRenderer
+                        , updateWindow
+                        , HAlign(..)
+                        , VAlign(..)
+                        ) where
 
 import Control.Monad
 import Data.Maybe
