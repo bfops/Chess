@@ -5,6 +5,7 @@ import Config
 import Control.Arrow
 import Control.DeepSeq
 import Data.Array
+import Data.HashString
 import Data.List
 import Game.Engine
 import Game.Input
@@ -18,7 +19,6 @@ import System.Log.Handler as H
 import System.Log.Handler.Simple
 import System.Log.Logger as L
 import Util.Defs
-import Util.HashString
 
 -- | Initializes all the loggers' states to what was defined in the config file.
 configLogger :: IO ()

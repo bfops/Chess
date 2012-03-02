@@ -18,11 +18,11 @@ import qualified Data.Conduit.List            as C
 import           Data.Hashable
 import qualified Data.HashMap.Strict          as M
 import qualified Data.HashSet                 as S
+import           Data.HashString
 import           Data.List                    as L
 import           Data.Maybe
 import qualified Data.Text                    as T
 import           Graphics.Rendering.OpenGL.Monad
-import           Util.HashString
 
 -- | A resource request is used to signify that the following resource is
 --   required to render the current frame. A resource will begin loading when

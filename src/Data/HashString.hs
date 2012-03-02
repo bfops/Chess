@@ -16,7 +16,7 @@
 --
 --   Use the quasiquoter as much as possible, as it makes the hashing run at
 --   compile time, saving us from having to do _any_ hashing at runtime.
-module Util.HashString ( -- * Normal Haskell Interface
+module Data.HashString ( -- * Normal Haskell Interface
                          HashString(..)
                        , toHashString
                        , fromHashString
