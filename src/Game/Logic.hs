@@ -13,6 +13,7 @@ module Game.Logic ( Color(..)
                   , hasEmptyPath
                   ) where
 
+import Control.Arrow
 import Control.DeepSeq
 import Control.Monad
 import Data.Array.IArray
@@ -35,8 +36,33 @@ data Color = White | Black
 instance NFData Color
 instance Cycle Color
 
-data Piece = Pawn | Rook | Knight | Bishop | Queen | King
-    deriving (Enum, Eq, Ord, Show)
+data Piece = Pawn Bool | Rook | Knight | Bishop | Queen | King
+    deriving (Eq, Ord, Show)
+
+instance Enum Piece where
+    succ (Pawn _) = Rook
+    succ Rook = Knight
+    succ Knight = Bishop
+    succ Bishop = Queen
+    succ Queen = King
+    pred King = Queen
+    pred Queen = Bishop
+    pred Bishop = Knight
+    pred Knight = Rook
+    pred Rook = Pawn False
+    fromEnum (Pawn _) = 0
+    fromEnum Rook = 1
+    fromEnum Knight = 2
+    fromEnum Bishop = 3
+    fromEnum Queen = 4
+    fromEnum King = 5
+    toEnum 0 = Pawn False
+    toEnum 1 = Rook
+    toEnum 2 = Knight
+    toEnum 3 = Bishop
+    toEnum 4 = Queen
+    toEnum 5 = King
+    toEnum _ = Pawn True
 
 instance NFData Piece
 
@@ -60,7 +86,7 @@ initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
                                                                 ]
     where backRank color = map (Just . (color,)) $
                                [Rook .. King] ++ (reverse [Rook .. Bishop])
-          frontRank color = replicate 8 $ Just (color, Pawn)
+          frontRank color = replicate 8 $ Just (color, Pawn False)
           otherRank = replicate 8 Nothing
 
 -- Attempt to move the piece from `src` to `dest` on `board`.
@@ -74,13 +100,16 @@ move :: Board
      -- ^ Nothing if the move is invalid, Just the new board otherwise.
 move board src dest = do (color, piece) <- board!src
                          guard . not . isFriendlyFire color $ board!dest
-                         movePiece board src dest piece
+                         tryMove board src dest piece
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False (isSameColor color)
           isSameColor color = (color ==) . fst
 
+tupleApply :: (a -> c -> r1) -> (b -> d -> r2) -> (a, b) -> (c, d) -> (r1, r2)
+tupleApply f g (a, b) (c, d) = (f a c, g b d)
+
 step :: (Ord a, Enum a, Ord b, Enum b) => (a, b) -> (a, b) -> (a, b)
-step (x1, y1) (x2, y2) = (step' x1 x2, step' y1 y2)
+step = tupleApply step' step'
     where step' :: (Ord c, Enum c) => c -> c -> c
           step' x y | x < y = succ x
                     | x > y = pred x
@@ -92,8 +121,29 @@ hasEmptyPath board origin dest = all isNothing $ map (board!) path
           unfoldStep pos = if pos == dest then Nothing
                            else Just (step pos dest, step pos dest)
 
-movePiece :: Board -> Position -> Position -> Piece -> Maybe Board
-movePiece board src dest _ = Just $ board // [ (src, Nothing)
-                                             , (dest, board!src)
-                                             ]
+delta :: Position -> Position -> (Int, Int)
+delta = flip $ tupleApply (\x y -> (fromEnum x) - (fromEnum y)) (-)
+
+-- Just moves the piece, no checking.
+makeMove :: Board -> Position -> Position -> Board
+makeMove board src dest = board // [ (src, Nothing)
+                                   , (dest, moveState =<< board!src)
+                                   ]
+    where moveState (color, Pawn False) = Just (color, Pawn True)
+          moveState x = Just x
+
+-- Try letting a pawn take from src to dest
+pawnTake :: Board -> Position -> Position -> Maybe Board
+pawnTake board src dest = (guard $ (first abs $ delta src dest) == (1, 1))
+                       >> board!dest
+                       >> (return $ makeMove board src dest)
+
+tryMove :: Board -> Position -> Position -> Piece -> Maybe Board
+tryMove board src dest (Pawn True) = if (second (flipIfBlack $ board!src) $ delta src dest) == (0, 1)
+                                     then Just $ makeMove board src dest
+                                     else pawnTake board src dest
+    where flipIfBlack (Just (White, _)) = id
+          flipIfBlack (Just (Black, _)) = negate
+
+tryMove board src dest _ = Just $ makeMove board src dest
 
