@@ -127,14 +127,14 @@ display gs ls = let rect = (rectangleRenderer 600 600 red)
 {-
 solveNewPos :: Coord -> InputState -> Coord
 solveNewPos _ = mousePos
+-}
 
 solveNewRot :: Double -> Double -> InputState -> Double
 solveNewRot r dt is = r + v*dt * fromIntegral
-                                 ((fromEnum $ testKeys is [ LeftButton  ])
-                                - (fromEnum $ testKeys is [ RightButton ]))
+                                 ((fromEnum $ testKeys is [ KeyChar 'z' ])
+                                - (fromEnum $ testKeys is [ KeyChar 'x' ]))
     where
         v = 1 -- velocity
--}
 
 considerMovement :: GameState -> InputState -> Maybe GameState
 considerMovement gs is = do tile <- clickCoords
@@ -166,7 +166,7 @@ update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest],
 update gs !t is = let gs'  = maybe gs id (considerMovement gs is)
                       gs'' = gs' { t0 = t
                                  --, rectPos = solveNewPos (rectPos gs) is
-                                 --, rectRot = solveNewRot (rectRot gs) dt is
+                                 , rectRot = solveNewRot (rectRot gs) dt is
                                  }
                    in return $!! ( gs''
                                  , [ Loaded [hashed|"yellow-dot.png"|]
