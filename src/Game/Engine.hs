@@ -12,6 +12,7 @@ import           Control.Concurrent
 import           Control.Concurrent.STM
 
 import           Data.Function
+import           Data.IORef
 import qualified Data.Text     as T
 import           Data.Ratio
 import           Data.Time.Clock
@@ -28,9 +29,12 @@ import           Graphics.UI.GLUT ( Position(..)
 
 import System.Log.Logger
 
+import UI.Render.Core
+
 import Util.Defs
 
-data GameState s = GameState { userState  :: TVar s
+data GameState s = GameState { userState  :: IORef s -- only read/written in the update thread.
+                             , renderFunc :: TVar (Loaders -> Renderer)
                              , windowDims :: TVar Dimensions
                              , inputSt    :: TVar InputState
                              , loaders    :: MVar Loaders
@@ -46,71 +50,78 @@ runGame :: T.Text
         -- ^ The title of the game window.
         -> gameState
         -- ^ The initial game's state.
-        -> (gameState -> Dimensions -> Loaders -> GL ())
-        -- ^ The 'render' function. Turns the state into something draw-able.
-        --   This should do the minimum amount of work possible. All the hard
-        --   stuff should be handled in the update function. The 'Dimensions'
-        --   parameter is the current resolution of the display. Respect it!
-        -> (gameState -> Double -> InputState -> IO (gameState, [ResourceRequest]))
+        -> (gameState ->
+           Double ->
+           InputState -> IO (gameState,
+                            [ResourceRequest],
+                            Loaders -> Renderer))
         -- ^ Updates the game's state, given a current time (in seconds), and
         --   the keyboard/mouse input vector. All computationally expensive
         --   tasks should be done in here.
         --
         --   Resources required for rendering the described scene must be
         --   specified in the second element of the returned tuple.
+        --
+        --   The third element in the returned value will be used for drawing
+        --   the scene described by the update function. It takes a loader, and
+        --   should return a renderer to... render!
         -> IO ()
-runGame title initState rend updateT = do runGraphics $ getArgsAndInitialize
-                                                      >> initialDisplayMode $= [ DoubleBuffered
-                                                                              , RGBAMode
-                                                                              , Multisampling
-                                                                              , WithSamplesPerPixel 2
-                                                                              ]
+runGame title initState updateT = do runGraphics $ getArgsAndInitialize
+                                                 >> initialDisplayMode $= [ DoubleBuffered
+                                                                         , RGBAMode
+                                                                         , Multisampling
+                                                                         , WithSamplesPerPixel 2
+                                                                         ]
 
-                                          w <- runGraphics $ initWindow title windowDimensions
+                                     w <- runGraphics $ initWindow title windowDimensions
 
-                                          state <- GameState <$> atomically (newTVar initState)
-                                                            <*> atomically (newTVar windowDimensions)
-                                                            <*> atomically (newTVar I.empty)
-                                                            <*> newMVar    (Loaders emptyResourceLoader)
+                                     state <- GameState <$> newIORef   initState
+                                                       <*> atomically (newTVar $ const defaultRenderer)
+                                                       <*> atomically (newTVar windowDimensions)
+                                                       <*> atomically (newTVar I.empty)
+                                                       <*> newMVar    (Loaders emptyResourceLoader)
 
-                                          runGraphics $ do displayCallback       $= display state w rend
-                                                           reshapeCallback       $= Just (reshape state)
-                                                           keyboardMouseCallback $= Just (onKeyMouse (inputSt state) $ windowDims state)
-                                                           motionCallback        $= Just (onMotion   (inputSt state) $ windowDims state)
-                                                           passiveMotionCallback $= Just (onMotion   (inputSt state) $ windowDims state)
+                                     runGraphics $ do displayCallback       $= display state w
+                                                      reshapeCallback       $= Just (reshape state)
+                                                      keyboardMouseCallback $= Just (onKeyMouse (inputSt state) $ windowDims state)
+                                                      motionCallback        $= Just (onMotion   (inputSt state) $ windowDims state)
+                                                      passiveMotionCallback $= Just (onMotion   (inputSt state) $ windowDims state)
 
-                                          tid <- forkIO $ runUpdateLoop state updateT
+                                     tid <- forkIO $ runUpdateLoop state updateT
 
-                                          mainLoop
-                                          killThread tid
+                                     mainLoop
+                                     killThread tid
 
 runUpdateLoop :: GameState a
-              -> (a -> Double -> InputState -> IO (a, [ResourceRequest]))
+              -> (a -> Double -> InputState -> IO (a, [ResourceRequest], Loaders -> Renderer))
               -> IO ()
-runUpdateLoop gs updateT = getPOSIXTime >>= go 0
+runUpdateLoop gs updateT = getPOSIXTime >>= go
     where
-        --   frame #        t1
-        go :: Integer -> NominalDiffTime -> IO ()
-        go !n t1 = do t2 <- waitFor (t1 + framePeriod)
+        go :: NominalDiffTime -> IO ()
+        go t1 = do t2 <- waitFor (t1 + framePeriod)
  
-                      us <- atomically . readTVar $ userState gs
-                      is <- atomically . readTVar $ inputSt gs
+                   us <- readIORef $ userState gs
+                   is <- atomically . readTVar $ inputSt gs
 
-                      -- Update! We let the render thread read the old state while
-                      -- we're updating, and clobber it afterwards. Although we
-                      -- don't run it in the STM monad, the state is guaranteed
-                      -- to be read-only while we update. If this is broken, fix
-                      -- the offending code!
-                      (us', reqs) <- updateT us (realToFrac t2) is
+                   -- Update! We let the render thread use our last renderer
+                   -- while we're updating, and we clobber it afterwards.
+                   -- Although we don't run it in the STM monad, the
+                   -- renderFunc is guaranteed to be read-only while we
+                   -- update. If this is broken, fix the offending code!
+                   (us', reqs, rend) <- updateT us (realToFrac t2) is
 
-                      modifyMVar_ (loaders gs) $ \ls ->
+                   writeIORef (userState gs) us'
+
+                   modifyMVar_ (loaders gs) $ \ls ->
                           do ls' <- updateLoaders ls reqs
-                             atomically $ writeTVar (userState gs) us'
+                             atomically $ writeTVar (renderFunc gs) rend
                              return ls'
 
-                      go (n+1) t2
+                   go t2
 
 -- | Runs 'chooseResources' on all available loaders.
+--   
+--   Adding a loader? Applicative its 'chooseResource' function on the end here.
 updateLoaders :: Loaders -> [ResourceRequest] -> IO Loaders
 updateLoaders (Loaders tl) rs = Loaders <$> chooseResources tl rs
 
@@ -131,15 +142,15 @@ framePeriod :: NominalDiffTime
 framePeriod = realToFrac $ 1 % targetFramerate
 
 -- | The GLUT 'displayCallback' hook.
-display :: GameState a -> Window-> (a -> Dimensions -> Loaders -> GL ()) -> IO ()
-display gs w rend = do (u, d, ls) <- modifyMVar (loaders gs) $ \ls ->
-                                     do ls' <- Loaders <$> (runGraphics . runDeferred $ textureL ls)
-                                        (u, d) <- atomically $ do u <- readTVar $ userState gs
-                                                                  d <- readTVar $ windowDims gs
-                                                                  return (u, d)
-                                        return (ls', (u, d, ls'))
-                       runGraphics $ rend u d ls
-                                   >> postRedisplay (Just w)
+display :: GameState a -> Window -> IO ()
+display gs w = do (d, rend) <- modifyMVar (loaders gs) $ \ls ->
+                       do ls' <- Loaders <$> (runGraphics . runDeferred $ textureL ls)
+                          (d, r) <- atomically $ do rend <- readTVar $ renderFunc gs
+                                                    d    <- readTVar $ windowDims gs
+                                                    return (d, rend)
+                          return (ls', (d, r ls'))
+                  runGraphics $ updateWindow d rend
+                              >> postRedisplay (Just w)
 
 -- | The GLUT 'reshapeCallback' hook.
 reshape :: GameState a -> Size -> IO ()

@@ -25,7 +25,8 @@ logLevel = DEBUG
 -- | Sets custom priority thresholds for different components. For example, if
 --   UI.Render is being too noisy, just add ("UI.Render", WARNING) to this list.
 customLogLevels :: [(String, Priority)]
-customLogLevels = []
+customLogLevels = [ ("Game.Texture", INFO)
+                  ]
 
 -- | The format string to use while logging.
 --

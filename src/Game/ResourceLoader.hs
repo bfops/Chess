@@ -208,15 +208,15 @@ solveExistingResources urs rl = do d'' <- d'
 --   This function will block until all 'Loaded' resources have finished
 --   loading.
 chooseResources :: (LoadableResource i r, NFData i, NFData r)
-                -- | The loader we'll consult for already loaded textures so we
-                --   can avoid double-allocations.
                 => ResourceLoader i r
-                -- | A list of textures that will be required in the next
-                --   render iteration.
+                -- ^ The loader we'll consult for already loaded textures so we
+                --   can avoid double-allocations.
                 -> [ResourceRequest]
-                -- | A new resource loader, with all the required textures in
-                --   place.
+                -- ^ A list of textures that will be required in the next
+                --   render iteration.
                 -> IO (ResourceLoader i r)
+                -- ^ A new resource loader, with all the required textures in
+                --   place.
 chooseResources rl reqs = do (reqs', rl') <- solveExistingResources reqs rl
                              newlyLoaded <- syncLoad $ syncRequests reqs'
                              asyncLoaded <- asyncLoad $ asyncRequests reqs'

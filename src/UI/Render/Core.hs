@@ -56,12 +56,12 @@ data Renderer = Renderer { render :: GL () -- ^ Draws the object onto the screen
                                            --   as this is automatically handled using
                                            --   the 'pos' field.
 
-                         , pos :: Either Coord -- | Specify absolute position
-                                               --   of the bottom-left corner
-                                               --   of the object.
-                                         (HAlign, VAlign) -- | Specify alignment
-                                                          --   relative to the
-                                                          --   parent
+                         , pos :: Either Coord -- Specify absolute position
+                                               -- of the bottom-left corner
+                                               -- of the object.
+                                         (HAlign, VAlign) -- Specify alignment
+                                                          -- relative to the
+                                                          -- parent
 
                          , rendDims :: Dimensions -- ^ The dimensions of the object.
 

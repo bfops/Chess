@@ -8,7 +8,6 @@ import Data.List
 import Game.Input
 import Game.Engine
 import Game.ResourceLoader
-import Graphics.Rendering.OpenGL.Monad as GL
 import System.IO (stderr)
 import System.Log.Formatter
 import System.Log.Handler as H
@@ -73,18 +72,18 @@ chessBoard l = let board = [ coord2render (x,y) `atIndex` (x,y) | x <- [0..7], y
 
         (dx, dy) = rendDims w
 
-display :: GameState -> Dimensions -> Loaders -> GL ()
-display gs dims ls = let rect = (rectangleRenderer 600 600 red)
-                                    { pos = Left . (subtract 300 *** subtract 300) $ rectPos gs
-                                    , children = [ board ]
-                                    }
-                         board = (chessBoard ls)
-                                    { pos = Right ( HCenterAlign 0
-                                                  , VCenterAlign 0
-                                                  )
-                                    , rotation = rectRot gs
-                                    }
-                      in updateWindow dims rect
+display :: GameState -> Loaders -> Renderer
+display gs ls = let rect = (rectangleRenderer 600 600 red)
+                                { pos = Left . (subtract 300 *** subtract 300) $ rectPos gs
+                                , children = [ board ]
+                                }
+                    board = (chessBoard ls)
+                                { pos = Right ( HCenterAlign 0
+                                              , VCenterAlign 0
+                                              )
+                                , rotation = rectRot gs
+                                }
+                 in rect
 
 -- | Solves for the new position of the rectangle, using the mouse as movement.
 solveNewPos :: Coord -> InputState -> Coord
@@ -98,14 +97,17 @@ solveNewRot r is = r + v * fromIntegral
         v = 0.05 -- velocity
 
 -- | We don't do anything... for now.
-update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest])
-update gs _ is = return ( GameState { rectPos = solveNewPos (rectPos gs) is,
-                                      rectRot = solveNewRot (rectRot gs) is
-                                    }
-                        , [ Loaded [hashed|"yellow-dot.png"|]
-                          , Loaded [hashed|"chess-square-w.png"|]
-                          , Loaded [hashed|"chess-square-b.png"|]
-                          ] )
+update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Loaders -> Renderer)
+update gs _ is = let gs' = GameState { rectPos = solveNewPos (rectPos gs) is
+                                     , rectRot = solveNewRot (rectRot gs) is
+                                     }
+                  in return ( gs'
+                            , [ Loaded [hashed|"yellow-dot.png"|]
+                              , Loaded [hashed|"chess-square-w.png"|]
+                              , Loaded [hashed|"chess-square-b.png"|]
+                              ]
+                            , display gs'
+                            )
 
 initState :: GameState
 initState = GameState (100, 100) 0
@@ -114,4 +116,4 @@ initState = GameState (100, 100) 0
 -- graphics. Enter main loop and process events.
 main :: IO ()
 main = do configLogger
-          runGame Config.windowTitle initState display update
+          runGame Config.windowTitle initState update
