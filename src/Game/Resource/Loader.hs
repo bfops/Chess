@@ -1,12 +1,12 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, TupleSections #-}
-module Game.ResourceLoader ( LoadableResource(..)
-                           , ResourceLoader
-                           , ResourceRequest(..)
-                           , emptyResourceLoader
-                           , chooseResources
-                           , runDeferred
-                           , getResource
-                           ) where
+module Game.Resource.Loader ( LoadableResource(..)
+                            , ResourceLoader
+                            , ResourceRequest(..)
+                            , emptyResourceLoader
+                            , chooseResources
+                            , runDeferred
+                            , getResource
+                            ) where
 
 import           Control.Applicative
 import           Control.Arrow ( second )
@@ -297,4 +297,3 @@ insertListM = L.foldl' ins
         ins t (k, x) = M.insert k x t
 {-# INLINE insertListM #-}
 {-# SPECIALIZE insertListM :: M.HashMap HashString b -> [(HashString, b)] -> M.HashMap HashString b #-}
-

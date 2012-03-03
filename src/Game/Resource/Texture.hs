@@ -6,13 +6,13 @@
 --   Textures are automatically deallocated by the garbage collector so you
 --   don't need to think about resource allocation, however, this is quite
 --   experimental. One day, I'll verify this is working.
-module Game.Texture ( Texture( texWidth, texHeight )
-                    , DynamicImage
-                    , getImage
-                    , uploadTexture
-                    , uploadTextures
-                    , renderTexture
-                    ) where
+module Game.Resource.Texture ( Texture( texWidth, texHeight )
+                             , DynamicImage
+                             , getImage
+                             , uploadTexture
+                             , uploadTextures
+                             , renderTexture
+                             ) where
 
 import           Codec.Picture                   as Pic
 import           Codec.PicturePrime              as PicPrime
@@ -29,7 +29,7 @@ import           Data.Word
 import           Foreign ( ForeignPtr, touchForeignPtr )
 import           Foreign.Concurrent
 import           Foreign.Ptr
-import           Game.ResourceLoader
+import           Game.Resource.Loader
 import qualified Graphics.Rendering.OpenGL.Monad as GL
 import qualified Graphics.Rendering.OpenGL.Monad.Unsafe as UGLY
 import qualified Paths_Chess                     as CP -- :)
