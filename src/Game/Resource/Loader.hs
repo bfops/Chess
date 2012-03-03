@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, TupleSections #-}
+{-# LANGUAGE TupleSections #-}
 module Game.Resource.Loader ( LoadableResource(..)
                             , ResourceLoader
                             , ResourceRequest(..)
@@ -21,7 +21,7 @@ import qualified Data.HashSet                 as S
 import           Data.HashString
 import           Data.List                    as L
 import           Data.Maybe
-import qualified Data.Text                    as T
+import           Game.Resource.Loadable
 import           Graphics.Rendering.OpenGL.Monad
 
 -- | A resource request is used to signify that the following resource is
@@ -41,26 +41,6 @@ resourceId :: ResourceRequest -> HashString
 resourceId (Preload h) = h
 resourceId (Loaded  h) = h
 {-# INLINE resourceId #-}
-
--- | A 'LoadableResource' is any resource which can be loaded from disk, that
---   we'll need to access in renderers.
---
---   If you need to upload a resource (such as a texture) to the graphics card,
---   do that in 'toGraphics'. Otherwise, keep all disk-loading in 'fromDisk'.
---
---   'i' is the intermediate, in-memory resource type. 'r' is the uploaded,
---   in-vram type. If you don't need to have your resource uploaded to the
---   graphics card, make 'i' and 'r' the same type, and 'toGraphics' a no-op.
-class LoadableResource i r | i -> r, r -> i where
-    -- | Loads a resource (with the given name) from disk, and into an
-    --   intermediate RAM-only buffer. This buffer can be of any type, denoted
-    --   by 'IntermediateRepr'.
-    fromDisk   :: T.Text -> IO (Maybe i)
-
-    -- | Uploads a RAM-loaded resource onto the graphics card. If no such
-    --   upload is needed, set the body of this function to @return@,
-    --   and make sure that 'i' is the same as 'r'.
-    toGraphics :: [i] -> GL [r]
 
 -- | The 'ResourceLoader' keeps track of all resources currently loaded in
 --   memory and on the graphics card. It is specialized for every type of

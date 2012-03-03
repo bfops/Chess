@@ -29,7 +29,7 @@ import           Data.Word
 import           Foreign ( ForeignPtr, touchForeignPtr )
 import           Foreign.Concurrent
 import           Foreign.Ptr
-import           Game.Resource.Loader
+import           Game.Resource.Loadable
 import qualified Graphics.Rendering.OpenGL.Monad as GL
 import qualified Graphics.Rendering.OpenGL.Monad.Unsafe as UGLY
 import qualified Paths_Chess                     as CP -- :)

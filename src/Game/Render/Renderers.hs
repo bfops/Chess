@@ -7,9 +7,9 @@ module Game.Render.Renderers ( rectangleRenderer
 import Data.HashString ( HashString )
 import Graphics.Rendering.OpenGL.Monad as GL
 import Game.Engine
-import Game.Resource.Texture
 import Game.Render.Colors
 import Game.Render.Core
+import Game.Resource.Texture
 
 renderText :: String -> String -> GL ()
 renderText _ _ = undefined

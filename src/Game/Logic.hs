@@ -135,7 +135,7 @@ tryMove board src dest (Pawn True) = (guard $ takeTest
                                      >> return (makeMove board src dest)
 
                         -- tryMove is only called when board!src exists.
-    where color = fst $ fromJust $ board!src
+    where color = fst . fromJust $ board!src
           -- change in position from our move.
           mvDelta = delta src dest
 
