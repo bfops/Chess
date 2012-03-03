@@ -138,9 +138,7 @@ solveNewRot r dt is = r + v*dt * fromIntegral
 
 considerMovement :: GameState -> InputState -> Maybe GameState
 considerMovement gs is = do tile <- clickCoords
-                            case mvSrc gs of
-                                Nothing -> select tile
-                                Just src -> src `moveTo` tile
+                            maybe (select tile) return $ mvSrc gs >>= (`moveTo` tile)
 
     where clickCoords = if testKeys is [ LeftButton ]
                         then let (x, y) = mousePos is
