@@ -18,25 +18,32 @@ import Data.Function
 import Data.Maybe
 import Data.List
 
+-- | Color of game pieces.
 data Color = White | Black
     deriving (Eq, Show, Enum, Bounded)
 
 instance NFData Color
 
+-- | Game pieces.
 data Piece = Pawn | Rook | Knight | Bishop | Queen | King
     deriving (Enum, Eq, Ord, Show)
 
 instance NFData Piece
 
+-- | Horizontal index of a chessboard.
 type File = Char
+-- | Vertical index of a chessboard.
 type Rank = Int
+-- | Describe a chessboard position.
 type Position = (File, Rank)
 type Delta = (Int, Int)
 
+-- | A square in a chessboard either contains nothing or a colored piece.
 type Tile = Maybe (Color, Piece)
+-- | Basic board type for describing game state.
 type Board = Array Position Tile
 
--- Initial state of the board.
+-- | Initial state of the game board.
 initBoard :: Board
 initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
                                                                 , frontRank White
@@ -52,7 +59,7 @@ initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
           frontRank color = replicate 8 $ Just (color, Pawn)
           otherRank = replicate 8 Nothing
 
--- Attempt to move the piece from `src` to `dest` on `board`.
+-- | Attempt to move the piece from `src` to `dest` on `board`.
 move :: Board
      -- ^ The board to move on
      -> Position
