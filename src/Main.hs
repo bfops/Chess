@@ -158,7 +158,7 @@ considerMovement gs is = do tile <- clickCoords
           moveTo src tile = do gameBoard <- move (board gs) src tile
                                return $ gs { mvSrc = Nothing
                                            , board = gameBoard
-                                           , turn = next $ turn gs
+                                           , turn = cyclicNext $ turn gs
                                            }
 
 -- | We don't do anything... for now.

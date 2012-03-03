@@ -18,13 +18,11 @@ import Data.Array.IArray
 import Data.Function
 import Data.Maybe
 import Data.List
-import Util.Defs
 
 data Color = White | Black
     deriving (Eq, Show, Enum, Bounded)
 
 instance NFData Color
-instance Cycle Color
 
 data Piece = Pawn | Rook | Knight | Bishop | Queen | King
     deriving (Enum, Eq, Ord, Show)
