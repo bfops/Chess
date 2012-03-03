@@ -8,8 +8,6 @@ module Game.Logic ( Color(..)
                   , Board
                   , initBoard
                   , move
-                  , next
-                  , prev
                   , hasEmptyPath
                   ) where
 
@@ -19,16 +17,7 @@ import Control.Monad
 import Data.Array.IArray
 import Data.Maybe
 import Data.List
-
-class (Enum a, Bounded a, Eq a) => Cycle a where
-    next :: a -> a
-    next a = if a == maxBound
-             then minBound
-             else succ a
-    prev :: a -> a
-    prev a = if a == minBound
-             then maxBound
-             else pred a
+import Util.Defs
 
 data Color = White | Black
     deriving (Eq, Show, Enum, Bounded)
@@ -36,33 +25,8 @@ data Color = White | Black
 instance NFData Color
 instance Cycle Color
 
-data Piece = Pawn Bool | Rook | Knight | Bishop | Queen | King
-    deriving (Eq, Ord, Show)
-
-instance Enum Piece where
-    succ (Pawn _) = Rook
-    succ Rook = Knight
-    succ Knight = Bishop
-    succ Bishop = Queen
-    succ Queen = King
-    pred King = Queen
-    pred Queen = Bishop
-    pred Bishop = Knight
-    pred Knight = Rook
-    pred Rook = Pawn False
-    fromEnum (Pawn _) = 0
-    fromEnum Rook = 1
-    fromEnum Knight = 2
-    fromEnum Bishop = 3
-    fromEnum Queen = 4
-    fromEnum King = 5
-    toEnum 0 = Pawn False
-    toEnum 1 = Rook
-    toEnum 2 = Knight
-    toEnum 3 = Bishop
-    toEnum 4 = Queen
-    toEnum 5 = King
-    toEnum _ = Pawn True
+data Piece = Pawn | Rook | Knight | Bishop | Queen | King
+    deriving (Enum, Eq, Ord, Show)
 
 instance NFData Piece
 
@@ -86,7 +50,7 @@ initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
                                                                 ]
     where backRank color = map (Just . (color,)) $
                                [Rook .. King] ++ (reverse [Rook .. Bishop])
-          frontRank color = replicate 8 $ Just (color, Pawn False)
+          frontRank color = replicate 8 $ Just (color, Pawn)
           otherRank = replicate 8 Nothing
 
 -- Attempt to move the piece from `src` to `dest` on `board`.
@@ -127,23 +91,39 @@ delta = flip $ tupleApply (\x y -> (fromEnum x) - (fromEnum y)) (-)
 -- Just moves the piece, no checking.
 makeMove :: Board -> Position -> Position -> Board
 makeMove board src dest = board // [ (src, Nothing)
-                                   , (dest, moveState =<< board!src)
+                                   , (dest, board!src)
                                    ]
-    where moveState (color, Pawn False) = Just (color, Pawn True)
-          moveState x = Just x
-
--- Try letting a pawn take from src to dest
-pawnTake :: Board -> Position -> Position -> Maybe Board
-pawnTake board src dest = (guard $ (first abs $ delta src dest) == (1, 1))
-                       >> board!dest
-                       >> (return $ makeMove board src dest)
 
 tryMove :: Board -> Position -> Position -> Piece -> Maybe Board
-tryMove board src dest (Pawn True) = if (second (flipIfBlack $ board!src) $ delta src dest) == (0, 1)
-                                     then Just $ makeMove board src dest
-                                     else pawnTake board src dest
-    where flipIfBlack (Just (White, _)) = id
-          flipIfBlack (Just (Black, _)) = negate
+tryMove board src dest Pawn = (guard $ takeTest
+                                    || moveTest
+                                    && ( normalTest
+                                      || doubleTest
+                                       )
+                              )
+                            >> (return $ makeMove board src dest)
+
+                        -- tryMove is only called when board!src exists.
+    where color = fst $ fromJust $ board!src
+          mvDelta = delta src dest
+
+          pawnStep :: (Int, Int)
+          pawnStep = if color == White
+                     then (0, 1)
+                     else (0, -1)
+
+          startRank :: Rank
+          startRank = if color == White
+                      then 2
+                      else 7
+
+          takeTest = (isJust $ board!dest)
+                   && (abs $ fst mvDelta) == 1
+                   && snd mvDelta == snd pawnStep
+          moveTest = hasEmptyPath board src dest
+          normalTest = mvDelta == pawnStep
+          doubleTest = snd src == startRank
+                     && mvDelta == second (*2) pawnStep
 
 tryMove board src dest _ = Just $ makeMove board src dest
 
