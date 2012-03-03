@@ -117,7 +117,7 @@ canMove board src dest Pawn = takeTest
                                )
 
                         -- canMove is only called when board!src exists.
-    where color = fst $ fromJust $ board!src
+    where color = fst . fromJust $ board!src
           -- change in position from our move.
           mvDelta = delta src dest
 
