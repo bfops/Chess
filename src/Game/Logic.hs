@@ -8,7 +8,6 @@ module Game.Logic ( Color(..)
                   , Board
                   , initBoard
                   , move
-                  , hasEmptyPath
                   ) where
 
 import Control.Arrow
@@ -34,6 +33,7 @@ instance NFData Piece
 type File = Char
 type Rank = Int
 type Position = (File, Rank)
+type Delta = (Int, Int)
 
 type Tile = Maybe (Color, Piece)
 type Board = Array Position Tile
@@ -65,7 +65,8 @@ move :: Board
      -- ^ Nothing if the move is invalid, Just the new board otherwise.
 move board src dest = do (color, piece) <- board!src
                          guard . not . isFriendlyFire color $ board!dest
-                         tryMove board src dest piece
+                         guard $ canMove board src dest piece
+                         return $ makeMove board src dest
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False (isSameColor color)
           isSameColor color = (color ==) . fst
@@ -82,11 +83,11 @@ step = tupleApply step' step'
 
 hasEmptyPath :: Board -> Position -> Position -> Bool
 hasEmptyPath board origin dest = all isNothing $ map (board!) path
-    where path = unfoldr unfoldStep origin
+    where path = unfoldr unfoldStep $ step origin dest
           unfoldStep pos = if pos == dest then Nothing
-                           else Just (step pos dest, step pos dest)
+                           else Just (pos, step pos dest)
 
-delta :: Position -> Position -> (Int, Int)
+delta :: Position -> Position -> Delta
 delta = flip $ tupleApply ((-) `on` fromEnum) (-)
 
 -- Just moves the piece, no checking.
@@ -95,17 +96,24 @@ makeMove board src dest = board // [ (src, Nothing)
                                    , (dest, board!src)
                                    ]
 
-tryMove :: Board -> Position -> Position -> Piece -> Maybe Board
-tryMove board src dest Pawn = (guard $ takeTest
-                                    || moveTest
-                                    && ( normalTest
-                                      || doubleTest
-                                       )
-                              )
-                            >> (return $ makeMove board src dest)
 
-                        -- tryMove is only called when board!src exists.
+isDiagonal :: Delta -> Bool
+isDiagonal (0, 0) = False
+isDiagonal (x, y) = abs x == abs y
+
+isStraightLine :: Delta -> Bool
+isStraightLine l = (fst l == 0) /= (snd l == 0)
+
+canMove :: Board -> Position -> Position -> Piece -> Bool
+canMove board src dest Pawn = takeTest
+                            || moveTest
+                            && ( normalTest
+                               || doubleTest
+                               )
+
+                        -- canMove is only called when board!src exists.
     where color = fst $ fromJust $ board!src
+          -- change in position from our move.
           mvDelta = delta src dest
 
           pawnStep :: (Int, Int)
@@ -121,10 +129,23 @@ tryMove board src dest Pawn = (guard $ takeTest
           takeTest = (isJust $ board!dest)
                    && (abs $ fst mvDelta) == 1
                    && snd mvDelta == snd pawnStep
-          moveTest = hasEmptyPath board src dest
+          moveTest = isNothing (board!dest)
+                   && hasEmptyPath board src dest
           normalTest = mvDelta == pawnStep
           doubleTest = snd src == startRank
                      && mvDelta == second (*2) pawnStep
-
-tryMove board src dest _ = Just $ makeMove board src dest
+canMove board src dest Rook = (isStraightLine $ delta src dest)
+                            && hasEmptyPath board src dest
+canMove _ src dest Knight = isL mvScalar
+    where isL (2, 1) = True
+          isL (1, 2) = True
+          isL _ = False
+          mvScalar = (abs *** abs) (delta src dest)
+canMove board src dest Bishop = isDiagonal (delta src dest)
+                              && hasEmptyPath board src dest
+canMove board src dest Queen = (isDiagonal mvDelta || isStraightLine mvDelta)
+                             && hasEmptyPath board src dest
+    where mvDelta = delta src dest
+canMove _ src dest King = (abs x + abs y) == 1
+    where (x, y) = delta src dest
 
