@@ -11,8 +11,10 @@ module Game.Render.Core ( Renderer(..)
                         , VAlign(..)
                         ) where
 
+import Control.DeepSeq ( NFData(..) )
 import Control.Monad
 import Data.Maybe
+import Game.Loaders
 import Graphics.Rendering.OpenGL.Monad
 import Util.Defs
 
@@ -38,11 +40,15 @@ data HAlign = LeftAlign    !Offset
             | RightAlign   !Offset
             | HCenterAlign !Offset
 
+instance NFData HAlign
+
 -- | A type used for specifying vertical alignment.
 --   each alignment aligns that part of the object with that part of the parent.
 data VAlign = TopAlign     !Offset
             | BottomAlign  !Offset
             | VCenterAlign !Offset
+
+instance NFData VAlign
 
 -- | A renderable is anything which can be drawn onto the screen.
 --   To build one, use renderer and override the necessary arguments.
@@ -51,10 +57,11 @@ data VAlign = TopAlign     !Offset
 --   >                        , pos = (10, 4)
 --   >                        , rendDims = (50, 50)
 --   >                        }
-data Renderer = Renderer { render :: GL () -- ^ Draws the object onto the screen. You
-                                           --   don't have to worry about positioning,
-                                           --   as this is automatically handled using
-                                           --   the 'pos' field.
+data Renderer = Renderer { render :: Loaders -> GL ()
+                           -- ^ Draws the object onto the screen, given a
+                           --   resource loader. You don't have to worry about
+                           --   positioning, as this is automatically handled
+                           --   by the 'pos' field.
 
                          , pos :: Either Coord -- Specify absolute position
                                                -- of the bottom-left corner
@@ -82,6 +89,15 @@ data Renderer = Renderer { render :: GL () -- ^ Draws the object onto the screen
                          , children :: [Renderer]
                          }
 
+instance NFData Renderer where
+    rnf r = rnf (render r)       `seq`
+            rnf (pos r)          `seq`
+            rnf (rendDims r)     `seq`
+            rnf (rotateAround r) `seq`
+            rnf (rotation r)     `seq`
+            rnf (children r)     `seq`
+            ()
+
 -- | The default renderer. Draws absolutely nothing. Overload its fields with:
 --
 --   > rect = defaultRenderer { draw = (drawRectangle 50 50)
@@ -91,7 +107,7 @@ data Renderer = Renderer { render :: GL () -- ^ Draws the object onto the screen
 --
 --   See: 'Renderer'
 defaultRenderer :: Renderer
-defaultRenderer = Renderer { render = return ()
+defaultRenderer = Renderer { render = const $ return ()
                            , pos = Left (0, 0)
                            , rendDims = (0, 0)
                            , rotateAround = Nothing
@@ -129,12 +145,12 @@ rad2deg rad = rad * 180 / pi
 --
 --   Make sure to pass in the dimensions of the region on which we should draw.
 --   Normally, this will the the `get windowSize` of the current window.
-updateWindow :: Dimensions -> Renderer -> GL ()
-updateWindow rootDims rs = do clear [ ColorBuffer ]
-                              matrixMode $= Modelview 0
-                              loadIdentity
-                              render' rootDims rs
-                              swapBuffers
+updateWindow :: Loaders -> Dimensions -> Renderer -> GL ()
+updateWindow ls rootDims rs = do clear [ ColorBuffer ]
+                                 matrixMode $= Modelview 0
+                                 loadIdentity
+                                 render' rootDims rs
+                                 swapBuffers
     where
         render' parentDims r = preservingMatrix $ do
                                 let (x, y) = absPos parentDims r
@@ -142,7 +158,7 @@ updateWindow rootDims rs = do clear [ ColorBuffer ]
                                     center = (w `div` 2, h `div` 2)
                                 translate $ Vector3 (fromIntegral x) (fromIntegral y) (0 :: GLdouble)
                                 applyRotation (rotation r) (fromMaybe center $ rotateAround r)
-                                render r
+                                render r ls
                                 forM_ (children r) $ render' (rendDims r)
 
 -- | To apply a rotation around a point, translate to that point, apply

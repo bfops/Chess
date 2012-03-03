@@ -34,7 +34,11 @@ data Piece = Pawn Bool
            | King Bool
     deriving (Eq, Ord, Show)
 
-instance NFData Piece
+instance NFData Piece where
+    rnf (Pawn x) = x `seq` ()
+    rnf (Rook x) = x `seq` ()
+    rnf (King x) = x `seq` ()
+    rnf    x     = x `seq` ()
 
 -- | Horizontal index of a chessboard.
 type File = Char
@@ -128,11 +132,8 @@ pawnStep color = if color == White
                  else (0, -1)
 
 tryMove :: Board -> Position -> Position -> Piece -> Maybe Board
-tryMove board src dest (Pawn True) = (guard $ takeTest
-                                            || moveTest
-                                            && normalTest
-                                     )
-                                     >> return (makeMove board src dest)
+tryMove board src dest (Pawn True) = do guard $ takeTest || moveTest && normalTest
+                                        return (makeMove board src dest)
 
                         -- tryMove is only called when board!src exists.
     where color = fst . fromJust $ board!src
@@ -146,35 +147,35 @@ tryMove board src dest (Pawn True) = (guard $ takeTest
           normalTest = mvDelta == pawnStep color
 
 tryMove board src dest (Pawn False) = firstOf [ tryMove board src dest (Pawn True)
-                                              , guard (delta src dest == second (*2) (pawnStep color))
-                                              >> guard (isNothing $ board!dest)
-                                              >> guard (hasEmptyPath board src dest)
-                                              >> return (makeMove board src dest)
+                                              , do guard $ delta src dest == second (*2) (pawnStep color)
+                                                   guard . isNothing $ board!dest
+                                                   guard $ hasEmptyPath board src dest
+                                                   return $ makeMove board src dest
                                               ]
     where color = fst . fromJust $ board!src
 
-tryMove board src dest (Rook _) = guard (isStraightLine $ delta src dest)
-                                >> guard (hasEmptyPath board src dest)
-                                >> return (makeMove board src dest)
+tryMove board src dest (Rook _) = do guard . isStraightLine $ delta src dest
+                                     guard $ hasEmptyPath board src dest
+                                     return $ makeMove board src dest
 
-tryMove board src dest Knight = guard (isL mvScalar)
-                              >> return (makeMove board src dest)
+tryMove board src dest Knight = do guard $ isL mvScalar
+                                   return $ makeMove board src dest
     where isL (2, 1) = True
           isL (1, 2) = True
           isL _ = False
           mvScalar = (abs *** abs) (delta src dest)
 
-tryMove board src dest Bishop = guard (isDiagonal $ delta src dest)
-                              >> guard (hasEmptyPath board src dest)
-                              >> return (makeMove board src dest)
+tryMove board src dest Bishop = do guard . isDiagonal $ delta src dest
+                                   guard $ hasEmptyPath board src dest
+                                   return $ makeMove board src dest
 
-tryMove board src dest Queen = guard (isDiagonal mvDelta || isStraightLine mvDelta)
-                             >> guard (hasEmptyPath board src dest)
-                             >> return (makeMove board src dest)
+tryMove board src dest Queen = do guard $ isDiagonal mvDelta || isStraightLine mvDelta
+                                  guard $ hasEmptyPath board src dest
+                                  return $ makeMove board src dest
     where mvDelta = delta src dest
 
-tryMove board src dest (King True) = guard (abs x + abs y == 1)
-                                   >> return (makeMove board src dest)
+tryMove board src dest (King True) = do guard $ abs x + abs y == 1
+                                        return $ makeMove board src dest
     where (x, y) = delta src dest
 
 tryMove board src dest (King False) = firstOf [ tryMove board src dest (King True)

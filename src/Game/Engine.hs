@@ -33,7 +33,7 @@ import System.Log.Logger
 import Util.Defs
 
 data GameState s = GameState { userState  :: IORef s -- only read/written in the update thread.
-                             , renderFunc :: TVar (Loaders -> Renderer)
+                             , toRender   :: TVar Renderer
                              , windowDims :: TVar Dimensions
                              , inputSt    :: TVar InputState
                              , loaders    :: MVar Loaders
@@ -49,7 +49,7 @@ runGame :: T.Text
            Double ->
            InputState -> IO (gameState,
                             [ResourceRequest],
-                            Loaders -> Renderer))
+                            Renderer))
         -- ^ Updates the game's state, given a current time (in seconds), and
         --   the keyboard/mouse input vector. All computationally expensive
         --   tasks should be done in here.
@@ -58,8 +58,7 @@ runGame :: T.Text
         --   specified in the second element of the returned tuple.
         --
         --   The third element in the returned value will be used for drawing
-        --   the scene described by the update function. It takes a loader, and
-        --   should return a renderer to... render!
+        --   the scene described by the update function.
         -> IO ()
 runGame title initState updateT = do runGraphics $ getArgsAndInitialize
                                                  >> initialDisplayMode $= [ DoubleBuffered
@@ -71,7 +70,7 @@ runGame title initState updateT = do runGraphics $ getArgsAndInitialize
                                      w <- runGraphics $ initWindow title windowDimensions
 
                                      state <- GameState <$> newIORef   initState
-                                                       <*> atomically (newTVar $ const defaultRenderer)
+                                                       <*> atomically (newTVar defaultRenderer)
                                                        <*> atomically (newTVar windowDimensions)
                                                        <*> atomically (newTVar I.empty)
                                                        <*> newMVar    (Loaders emptyResourceLoader)
@@ -88,7 +87,7 @@ runGame title initState updateT = do runGraphics $ getArgsAndInitialize
                                      killThread tid
 
 runUpdateLoop :: GameState a
-              -> (a -> Double -> InputState -> IO (a, [ResourceRequest], Loaders -> Renderer))
+              -> (a -> Double -> InputState -> IO (a, [ResourceRequest], Renderer))
               -> IO ()
 runUpdateLoop gs updateT = getPOSIXTime >>= go
     where
@@ -109,7 +108,7 @@ runUpdateLoop gs updateT = getPOSIXTime >>= go
 
                    modifyMVar_ (loaders gs) $ \ls ->
                           do ls' <- updateLoaders ls reqs
-                             atomically $ writeTVar (renderFunc gs) rend
+                             atomically $ writeTVar (toRender gs) rend
                              return ls'
 
                    go t2
@@ -132,13 +131,13 @@ framePeriod = realToFrac $ 1 % targetFramerate
 
 -- | The GLUT 'displayCallback' hook.
 display :: GameState a -> Window -> IO ()
-display gs w = do (d, rend) <- modifyMVar (loaders gs) $ \ls ->
+display gs w = do (d, rend, ls) <- modifyMVar (loaders gs) $ \ls ->
                        do ls' <- runGraphics $ runLoadersDeferred ls
-                          (d, r) <- atomically $ do rend <- readTVar $ renderFunc gs
+                          (d, r) <- atomically $ do rend <- readTVar $ toRender gs
                                                     d    <- readTVar $ windowDims gs
                                                     return (d, rend)
-                          return (ls', (d, r ls'))
-                  runGraphics $ updateWindow d rend
+                          return (ls', (d, r, ls'))
+                  runGraphics $ updateWindow ls d rend
                               >> postRedisplay (Just w)
 
 -- | The GLUT 'reshapeCallback' hook.

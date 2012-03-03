@@ -1,17 +1,25 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RankNTypes, TemplateHaskell #-}
 module Game.Render.Renderers ( rectangleRenderer
-                             , textureRenderer
+                             --, textureRenderer -- NEIN! Use makeTextureRenderer.
+                             , texRend
                              , textRenderer
                              ) where
 
-import Data.HashString ( HashString )
+import Data.HashString
+import qualified Data.Text as T
 import Graphics.Rendering.OpenGL.Monad as GL
 import Game.Engine
 import Game.Render.Colors
 import Game.Render.Core
 import Game.Resource.Texture
+import Language.Haskell.TH
+import Language.Haskell.TH.Quote
+import Language.Haskell.TH.Syntax
+import System.IO.Unsafe ( unsafePerformIO ) -- Only used in TH, to load dimensions.
 
-renderText :: String -> String -> GL ()
+import Util.Defs
+
+renderText :: String -> String -> Loaders -> GL ()
 renderText _ _ = undefined
 
 -- | Given a loader, texture name, and renderer, returns a renderer drawing
@@ -24,16 +32,35 @@ renderText _ _ = undefined
 --   >                          , hAlign = HCenterAlign 0
 --   >                          , children = getCoinChildren
 --   >                          }
-textureRenderer :: Loaders
-                -> HashString -- ^ The name of the texture. Use the 'hashed' quasiquoter.
+textureRenderer :: HashString -- ^ The name of the texture. Use the 'hashed' quasiquoter.
+                -> Dimensions
                 -> Renderer
-textureRenderer l n = case tex of
-                        Just t -> defaultRenderer { render = renderTexture t
-                                                 , rendDims = (texWidth t, texHeight t)
-                                                 }
-                        Nothing -> rectangleRenderer 10 10 red
+textureRenderer n ds = defaultRenderer { render = renderFunc
+                                       , rendDims = ds
+                                       }
     where
-        tex = getResource (textureL l) n
+        renderFunc ls = case getResource (textureL ls) n of
+                            Just tex -> renderTexture tex
+                            Nothing  -> rectRender ds red 
+
+getTexDims :: String -> IO Dimensions
+getTexDims s = do img <- getImage (T.pack s) 
+                  case img of
+                    Just x  -> return (imageWidth' x, imageHeight' x)
+                    Nothing -> error $ "Texture \"" ++ s ++ "\" not found!"
+
+texRenderQuoter :: String -> Q Exp
+texRenderQuoter s = [| textureRenderer $(hString s') $(lift . unsafePerformIO $ getTexDims s') |]
+    where
+        s' = filter (/= '"') s
+
+-- | Usage : let dot = [texRend|"yellow-dot.png"|] :: Renderer
+texRend :: QuasiQuoter
+texRend = QuasiQuoter { quoteExp  = texRenderQuoter
+                      , quotePat  = undefined
+                      , quoteType = undefined
+                      , quoteDec  = undefined
+                      }
 
 textRenderer :: String -- ^ The name of the font we will use for rendering.
              -> String -- ^ The string we're drawing.
@@ -60,15 +87,18 @@ rectangleRenderer :: GL.Color a
                   -> a    -- ^ The color of the desired rectangle.
                   -> Renderer
 rectangleRenderer width height col =
-    defaultRenderer { render = renderPrimitive' GL.LineLoop
-                                                col
-                                                [ (left, top)
-                                                , (right, top)
-                                                , (right, bottom)
-                                                , (left, bottom)
-                                                ]
+    defaultRenderer { render = const $ rectRender (width, height) col
                     , rendDims = (width, height)
                     }
+
+rectRender :: GL.Color a => (Int, Int) -> a -> GL.GL ()
+rectRender (width, height) col = renderPrimitive' GL.LineLoop
+                                                  col
+                                                  [ (left, top)
+                                                  , (right, top)
+                                                  , (right, bottom)
+                                                  , (left, bottom)
+                                                  ]
     where
         top = height
         bottom = 0

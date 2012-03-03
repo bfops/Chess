@@ -12,6 +12,9 @@ module Game.Resource.Texture ( Texture( texWidth, texHeight )
                              , uploadTexture
                              , uploadTextures
                              , renderTexture
+                             -- * Low level image functions.
+                             , imageWidth'
+                             , imageHeight'
                              ) where
 
 import           Codec.Picture                   as Pic

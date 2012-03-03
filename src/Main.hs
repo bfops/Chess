@@ -2,11 +2,12 @@
 module Main (main) where
 
 import Config
-import Control.Arrow
 import Control.DeepSeq
 import Data.Array
+import qualified Data.HashMap.Strict as M
 import Data.HashString
 import Data.List
+import Data.Maybe
 import Game.Engine
 import Game.Input
 import Game.Logic
@@ -60,6 +61,21 @@ instance NFData GameState where
              rnf (turn    gs) `seq`
              ()
 
+pieceMap :: M.HashMap HashString Renderer
+pieceMap = M.fromList [ ([hashed|"piece-b-b.png"|], [texRend|"piece-b-b.png"|])
+                      , ([hashed|"piece-b-k.png"|], [texRend|"piece-b-k.png"|])
+                      , ([hashed|"piece-b-n.png"|], [texRend|"piece-b-n.png"|])
+                      , ([hashed|"piece-b-p.png"|], [texRend|"piece-b-p.png"|])
+                      , ([hashed|"piece-b-q.png"|], [texRend|"piece-b-q.png"|])
+                      , ([hashed|"piece-b-r.png"|], [texRend|"piece-b-r.png"|])
+                      , ([hashed|"piece-w-b.png"|], [texRend|"piece-w-b.png"|])
+                      , ([hashed|"piece-w-k.png"|], [texRend|"piece-w-k.png"|])
+                      , ([hashed|"piece-w-n.png"|], [texRend|"piece-w-n.png"|])
+                      , ([hashed|"piece-w-p.png"|], [texRend|"piece-w-p.png"|])
+                      , ([hashed|"piece-w-q.png"|], [texRend|"piece-w-q.png"|])
+                      , ([hashed|"piece-w-r.png"|], [texRend|"piece-w-r.png"|])
+                      ]
+
 -- Get the filename of the texture to load for this piece.
 fileString :: Game.Logic.Color -> Piece -> HashString
 fileString c p = toHashString $ "piece-" ++ (colorString c) ++ "-" ++ (pieceString p) ++ ".png"
@@ -77,13 +93,13 @@ fileString c p = toHashString $ "piece-" ++ (colorString c) ++ "-" ++ (pieceStri
 allPieces :: [HashString]
 allPieces = [ fileString c p | c <- [White, Black] , p <- [Pawn False, Rook False, Knight, Bishop, Queen, King False] ]
 
-chessBoard :: Loaders -> Board -> Renderer
-chessBoard l gameBoard = let renderBoard = [ tileRender (x,y) | x <- [0..7], y <- [0..7] ]
-                          in defaultRenderer { children = renderBoard, rendDims = (dx*8, dy*8) }
+chessBoard :: Board -> Renderer
+chessBoard gameBoard = let renderBoard = [ tileRender (x,y) | x <- [0..7], y <- [0..7] ]
+                        in defaultRenderer { children = renderBoard, rendDims = (dx*8, dy*8) }
     where
         w, b :: Renderer
-        w = textureRenderer l [hashed|"chess-square-w.png"|]
-        b = textureRenderer l [hashed|"chess-square-b.png"|]
+        w = [texRend|"chess-square-w.png"|]
+        b = [texRend|"chess-square-b.png"|]
 
         idx2pos :: Coord -> Coord
         idx2pos (x, y) = (dx*x, dy*y)
@@ -97,7 +113,7 @@ chessBoard l gameBoard = let renderBoard = [ tileRender (x,y) | x <- [0..7], y <
                   evenx = even x
                   eveny = even y
                   pieceRender Nothing = []
-                  pieceRender (Just (c, pce)) = [(textureRenderer l $ fileString c pce)
+                  pieceRender (Just (c, pce)) = [(fromJust $ M.lookup (fileString c pce) pieceMap)
                                                     { pos = Right (HCenterAlign 0, VCenterAlign 0) }]
 
         withPosition :: Renderer -> Coord -> Renderer
@@ -111,18 +127,20 @@ chessBoard l gameBoard = let renderBoard = [ tileRender (x,y) | x <- [0..7], y <
 
         (dx, dy) = rendDims w
 
-display :: GameState -> Loaders -> Renderer
-display gs ls = let rect = (rectangleRenderer 600 600 red)
-                                { pos = Left . (subtract 300 *** subtract 300) $ rectPos gs
+display :: GameState -> Renderer
+display gs = let rect = (rectangleRenderer 600 600 red)
+                                { pos = Right ( HCenterAlign 0
+                                              , VCenterAlign 0
+                                              )
                                 , children = [ boardRender ]
                                 }
-                    boardRender = (chessBoard ls $ board gs)
+                 boardRender = (chessBoard $ board gs)
                                 { pos = Right ( HCenterAlign 0
                                               , VCenterAlign 0
                                               )
                                 , rotation = rectRot gs
                                 }
-                 in rect
+              in rect
 
 {-
 solveNewPos :: Coord -> InputState -> Coord
@@ -162,7 +180,7 @@ considerMovement gs is = do tile <- clickCoords
                                            }
 
 -- | We don't do anything... for now.
-update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Loaders -> Renderer)
+update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Renderer)
 update gs !t is = let gs'  = maybe gs id (considerMovement gs is)
                       gs'' = gs' { t0 = t
                                  --, rectPos = solveNewPos (rectPos gs) is
