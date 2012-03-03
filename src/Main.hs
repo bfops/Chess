@@ -12,7 +12,7 @@ import Game.Input
 import Game.Logic
 import Game.Render
 import Game.Render.Colors
-import Game.ResourceLoader
+import Game.Resource.Loader
 import System.IO (stderr)
 import System.Log.Formatter
 import System.Log.Handler as H

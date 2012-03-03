@@ -15,6 +15,7 @@ import Control.Arrow
 import Control.DeepSeq
 import Control.Monad
 import Data.Array.IArray
+import Data.Function
 import Data.Maybe
 import Data.List
 import Util.Defs
@@ -86,7 +87,7 @@ hasEmptyPath board origin dest = all isNothing $ map (board!) path
                            else Just (step pos dest, step pos dest)
 
 delta :: Position -> Position -> (Int, Int)
-delta = flip $ tupleApply (\x y -> (fromEnum x) - (fromEnum y)) (-)
+delta = flip $ tupleApply ((-) `on` fromEnum) (-)
 
 -- Just moves the piece, no checking.
 makeMove :: Board -> Position -> Position -> Board

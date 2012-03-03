@@ -20,8 +20,8 @@ import           Data.Time.Clock.POSIX
 
 import Game.Input as I
 import Game.Render.Core
-import Game.ResourceLoader
-import Game.Texture
+import Game.Resource.Loader
+import Game.Resource.Texture
 
 import           Graphics.Rendering.OpenGL.Monad
 import           Graphics.UI.GLUT ( Position(..)

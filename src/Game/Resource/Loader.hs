@@ -1,12 +1,12 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, TupleSections #-}
-module Game.ResourceLoader ( LoadableResource(..)
-                           , ResourceLoader
-                           , ResourceRequest(..)
-                           , emptyResourceLoader
-                           , chooseResources
-                           , runDeferred
-                           , getResource
-                           ) where
+module Game.Resource.Loader ( LoadableResource(..)
+                            , ResourceLoader
+                            , ResourceRequest(..)
+                            , emptyResourceLoader
+                            , chooseResources
+                            , runDeferred
+                            , getResource
+                            ) where
 
 import           Control.Applicative
 import           Control.Arrow ( second )
@@ -217,8 +217,8 @@ chooseResources :: (LoadableResource i r, NFData i, NFData r)
                 -- ^ A new resource loader, with all the required textures in
                 --   place.
 chooseResources rl reqs = do (reqs', rl') <- solveExistingResources reqs rl
-                             newlyLoaded <- syncLoad $ syncRequests reqs'
-                             asyncLoaded <- asyncLoad $ asyncRequests reqs'
+                             newlyLoaded  <- syncLoad  $ syncRequests reqs'
+                             asyncLoaded  <- asyncLoad $ asyncRequests reqs'
                              return $!! ResourceLoader (loaded rl')
                                                        (deferred  rl' `insertListM` newlyLoaded)
                                                        (preloaded rl' `insertListM` map (second PartialLoad) asyncLoaded)
@@ -297,4 +297,3 @@ insertListM = L.foldl' ins
         ins t (k, x) = M.insert k x t
 {-# INLINE insertListM #-}
 {-# SPECIALIZE insertListM :: M.HashMap HashString b -> [(HashString, b)] -> M.HashMap HashString b #-}
-
