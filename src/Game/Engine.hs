@@ -19,9 +19,9 @@ import           Data.Time.Clock
 import           Data.Time.Clock.POSIX
 
 import Game.Input as I
+import Game.Loaders
 import Game.Render.Core
 import Game.Resource.Loader
-import Game.Resource.Texture
 
 import           Graphics.Rendering.OpenGL.Monad
 import           Graphics.UI.GLUT ( Position(..)
@@ -38,10 +38,6 @@ data GameState s = GameState { userState  :: IORef s -- only read/written in the
                              , inputSt    :: TVar InputState
                              , loaders    :: MVar Loaders
                              }
-
--- | The resource loaders associated with any running game.
-data Loaders = Loaders { textureL :: ResourceLoader DynamicImage Texture
-                       }
 
 -- | Starts the main loop of a game. Games will be run full screen and at the
 --   maximum possible resolution.
@@ -118,12 +114,6 @@ runUpdateLoop gs updateT = getPOSIXTime >>= go
 
                    go t2
 
--- | Runs 'chooseResources' on all available loaders.
---   
---   Adding a loader? Applicative its 'chooseResource' function on the end here.
-updateLoaders :: Loaders -> [ResourceRequest] -> IO Loaders
-updateLoaders (Loaders tl) rs = Loaders <$> chooseResources tl rs
-
 -- | Waits for it to be at least the given time, and returns the time for "now"
 --   as a convenience.
 waitFor :: NominalDiffTime -> IO NominalDiffTime
@@ -143,7 +133,7 @@ framePeriod = realToFrac $ 1 % targetFramerate
 -- | The GLUT 'displayCallback' hook.
 display :: GameState a -> Window -> IO ()
 display gs w = do (d, rend) <- modifyMVar (loaders gs) $ \ls ->
-                       do ls' <- Loaders <$> (runGraphics . runDeferred $ textureL ls)
+                       do ls' <- runGraphics $ runLoadersDeferred ls
                           (d, r) <- atomically $ do rend <- readTVar $ renderFunc gs
                                                     d    <- readTVar $ windowDims gs
                                                     return (d, rend)
