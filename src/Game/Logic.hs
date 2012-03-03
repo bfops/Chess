@@ -151,7 +151,7 @@ tryMove board src dest (Pawn False) = firstOf [ tryMove board src dest (Pawn Tru
                                               >> guard (hasEmptyPath board src dest)
                                               >> return (makeMove board src dest)
                                               ]
-    where color = fst $ fromJust $ board!src
+    where color = fst . fromJust $ board!src
 
 tryMove board src dest (Rook _) = guard (isStraightLine $ delta src dest)
                                 >> guard (hasEmptyPath board src dest)
@@ -178,12 +178,11 @@ tryMove board src dest (King True) = guard (abs x + abs y == 1)
     where (x, y) = delta src dest
 
 tryMove board src dest (King False) = firstOf [ tryMove board src dest (King True)
-                                              , guard (hasEmptyPath board src dest)
-                                              >> getRookPos
-                                              >>= return . castle
+                                              , liftM castle $ guard (hasEmptyPath board src dest)
+                                                             >> getRookPos
                                               ]
     where mvDelta = delta src dest
-          color = fst $ fromJust $ board!src
+          color = fst . fromJust $ board!src
           rookRank = if color == White
                      then 1
                      else 8
@@ -195,7 +194,7 @@ tryMove board src dest (King False) = firstOf [ tryMove board src dest (King Tru
                             (_, rookPos):_ -> Just rookPos
 
           castleTest (d, rookPos) = mvDelta == d
-                                  && isJust (board!rookPos >>= (return . (Rook False ==) . snd))
+                                  && isJust (liftM ((Rook False ==) . snd) $ board!rookPos)
 
           rookDelta = first (`div` (-2)) mvDelta
           rookDest = tupleApply (\x y -> toEnum $ fromEnum x + y) (+) dest rookDelta
