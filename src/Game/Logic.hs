@@ -25,8 +25,14 @@ data Color = White | Black
 instance NFData Color
 
 -- | Game pieces.
-data Piece = Pawn | Rook | Knight | Bishop | Queen | King
-    deriving (Enum, Eq, Ord, Show)
+-- The Bool parameter indicates whether or not the piece has moved.
+data Piece = Pawn Bool
+           | Rook Bool
+           | Knight
+           | Bishop
+           | Queen
+           | King Bool
+    deriving (Eq, Ord, Show)
 
 instance NFData Piece
 
@@ -55,8 +61,8 @@ initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
                                                                 , backRank Black
                                                                 ]
     where backRank color = map (Just . (color,)) $
-                               [Rook .. King] ++ (reverse [Rook .. Bishop])
-          frontRank color = replicate 8 $ Just (color, Pawn)
+                               [Rook False, Knight, Bishop, Queen, King False, Bishop, Knight, Rook False]
+          frontRank color = replicate 8 $ Just (color, Pawn False)
           otherRank = replicate 8 Nothing
 
 -- | Attempt to move the piece from `src` to `dest` on `board`.
@@ -70,8 +76,7 @@ move :: Board
      -- ^ Nothing if the move is invalid, Just the new board otherwise.
 move board src dest = do (color, piece) <- board!src
                          guard . not . isFriendlyFire color $ board!dest
-                         guard $ canMove board src dest piece
-                         return $ makeMove board src dest
+                         tryMove board src dest piece
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False (isSameColor color)
           isSameColor color = (color ==) . fst
@@ -98,9 +103,12 @@ delta = flip $ tupleApply ((-) `on` fromEnum) (-)
 -- Just moves the piece, no checking.
 makeMove :: Board -> Position -> Position -> Board
 makeMove board src dest = board // [ (src, Nothing)
-                                   , (dest, board!src)
+                                   , (dest, board!src >>= newStatus)
                                    ]
-
+    where newStatus (color, Pawn False) = Just (color, Pawn True)
+          newStatus (color, Rook False) = Just (color, Rook True)
+          newStatus (color, King False) = Just (color, King True)
+          newStatus x = Just x
 
 isDiagonal :: Delta -> Bool
 isDiagonal (0, 0) = False
@@ -109,53 +117,87 @@ isDiagonal (x, y) = abs x == abs y
 isStraightLine :: Delta -> Bool
 isStraightLine l = (fst l == 0) /= (snd l == 0)
 
-canMove :: Board -> Position -> Position -> Piece -> Bool
-canMove board src dest Pawn = takeTest
-                            || moveTest
-                            && ( normalTest
-                               || doubleTest
-                               )
+firstOf :: [Maybe a] -> Maybe a
+firstOf lst = case filter isJust lst of
+    [] -> Nothing
+    x:_ -> x
 
-                        -- canMove is only called when board!src exists.
+pawnStep :: Game.Logic.Color -> (Int, Int)
+pawnStep color = if color == White
+                 then (0, 1)
+                 else (0, -1)
+
+tryMove :: Board -> Position -> Position -> Piece -> Maybe Board
+tryMove board src dest (Pawn True) = (guard $ takeTest
+                                            || moveTest
+                                            && normalTest
+                                     )
+                                     >> return (makeMove board src dest)
+
+                        -- tryMove is only called when board!src exists.
     where color = fst $ fromJust $ board!src
           -- change in position from our move.
           mvDelta = delta src dest
 
-          pawnStep :: (Int, Int)
-          pawnStep = if color == White
-                     then (0, 1)
-                     else (0, -1)
-
-          startRank :: Rank
-          startRank = if color == White
-                      then 2
-                      else 7
-
           takeTest = (isJust $ board!dest)
                    && (abs $ fst mvDelta) == 1
-                   && snd mvDelta == snd pawnStep
+                   && snd mvDelta == snd (pawnStep color)
           moveTest = isNothing (board!dest)
-                   && hasEmptyPath board src dest
-          normalTest = mvDelta == pawnStep
-          doubleTest = snd src == startRank
-                     && mvDelta == second (*2) pawnStep
+          normalTest = mvDelta == pawnStep color
 
-canMove board src dest Rook = (isStraightLine $ delta src dest)
-                            && hasEmptyPath board src dest
+tryMove board src dest (Pawn False) = firstOf [ tryMove board src dest (Pawn True)
+                                              , guard (delta src dest == second (*2) (pawnStep color))
+                                              >> guard (isNothing $ board!dest)
+                                              >> guard (hasEmptyPath board src dest)
+                                              >> return (makeMove board src dest)
+                                              ]
+    where color = fst $ fromJust $ board!src
 
-canMove _ src dest Knight = isL mvScalar
+tryMove board src dest (Rook _) = guard (isStraightLine $ delta src dest)
+                                >> guard (hasEmptyPath board src dest)
+                                >> return (makeMove board src dest)
+
+tryMove board src dest Knight = guard (isL mvScalar)
+                              >> return (makeMove board src dest)
     where isL (2, 1) = True
           isL (1, 2) = True
           isL _ = False
           mvScalar = (abs *** abs) (delta src dest)
 
-canMove board src dest Bishop = isDiagonal (delta src dest)
-                              && hasEmptyPath board src dest
+tryMove board src dest Bishop = guard (isDiagonal $ delta src dest)
+                              >> guard (hasEmptyPath board src dest)
+                              >> return (makeMove board src dest)
 
-canMove board src dest Queen = (isDiagonal mvDelta || isStraightLine mvDelta)
-                             && hasEmptyPath board src dest
+tryMove board src dest Queen = guard (isDiagonal mvDelta || isStraightLine mvDelta)
+                             >> guard (hasEmptyPath board src dest)
+                             >> return (makeMove board src dest)
     where mvDelta = delta src dest
 
-canMove _ src dest King = (abs x + abs y) == 1
+tryMove board src dest (King True) = guard (abs x + abs y == 1)
+                                   >> return (makeMove board src dest)
     where (x, y) = delta src dest
+
+tryMove board src dest (King False) = firstOf [ tryMove board src dest (King True)
+                                              , guard (hasEmptyPath board src dest)
+                                              >> getRookPos
+                                              >>= return . castle
+                                              ]
+    where mvDelta = delta src dest
+          color = fst $ fromJust $ board!src
+          rookRank = if color == White
+                     then 1
+                     else 8
+
+          getRookPos = case filter castleTest [ ((-2, 0), ('A', rookRank))
+                                              , ((2, 0) , ('H', rookRank))
+                                              ] of
+                            [] -> Nothing
+                            (_, rookPos):_ -> Just rookPos
+
+          castleTest (d, rookPos) = mvDelta == d
+                                  && isJust (board!rookPos >>= (return . (Rook False ==) . snd))
+
+          rookDelta = first (`div` (-2)) mvDelta
+          rookDest = tupleApply (\x y -> toEnum $ fromEnum x + y) (+) dest rookDelta
+          castle rookPos = makeMove (makeMove board src dest) rookPos rookDest
 

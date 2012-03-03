@@ -66,16 +66,16 @@ fileString c p = toHashString $ "piece-" ++ (colorString c) ++ "-" ++ (pieceStri
     where colorString White = "w"
           colorString Black = "b"
 
-          pieceString Pawn = "p"
-          pieceString Rook = "r"
+          pieceString (Pawn _) = "p"
+          pieceString (Rook _) = "r"
           pieceString Knight = "n"
           pieceString Bishop = "b"
           pieceString Queen = "q"
-          pieceString King = "k"
+          pieceString (King _) = "k"
 
 -- Prevents recomputation of our piece hashstrings.
 allPieces :: [HashString]
-allPieces = [ fileString c p | c <- [White, Black] , p <- [Pawn ..King] ]
+allPieces = [ fileString c p | c <- [White, Black] , p <- [Pawn False, Rook False, Knight, Bishop, Queen, King False] ]
 
 chessBoard :: Loaders -> Board -> Renderer
 chessBoard l gameBoard = let renderBoard = [ tileRender (x,y) | x <- [0..7], y <- [0..7] ]
