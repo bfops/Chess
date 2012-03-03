@@ -132,18 +132,23 @@ canMove board src dest Pawn = takeTest
           normalTest = mvDelta == pawnStep
           doubleTest = snd src == startRank
                      && mvDelta == second (*2) pawnStep
+
 canMove board src dest Rook = (isStraightLine $ delta src dest)
                             && hasEmptyPath board src dest
+
 canMove _ src dest Knight = isL mvScalar
     where isL (2, 1) = True
           isL (1, 2) = True
           isL _ = False
           mvScalar = (abs *** abs) (delta src dest)
+
 canMove board src dest Bishop = isDiagonal (delta src dest)
                               && hasEmptyPath board src dest
+
 canMove board src dest Queen = (isDiagonal mvDelta || isStraightLine mvDelta)
                              && hasEmptyPath board src dest
     where mvDelta = delta src dest
+
 canMove _ src dest King = (abs x + abs y) == 1
     where (x, y) = delta src dest
 
