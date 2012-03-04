@@ -98,8 +98,9 @@ allPieces :: [HashString]
 allPieces = [ fileString c p | c <- [White, Black] , p <- [Pawn False, Rook False, Knight, Bishop, Queen, King False] ]
 
 chessBoard :: Board -> Renderer
-chessBoard gameBoard = let renderBoard = [ tileRender (x,y) | x <- [0..7], y <- [0..7] ]
-                        in defaultRenderer { children = renderBoard, rendDims = (dx*8, dy*8) }
+chessBoard gameBoard | rendDims w /= rendDims b = error "White and black square textures are not the same size."
+                     | otherwise               = let renderBoard = [ tileRender (x,y) | x <- [0..7], y <- [0..7] ]
+                                                  in defaultRenderer { children = renderBoard, rendDims = (dx*8, dy*8) }
     where
         w, b :: Renderer
         w = [texRend|"chess-square-w.png"|]
