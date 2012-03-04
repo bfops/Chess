@@ -1,4 +1,4 @@
-{-# LANGUAGE QuasiQuotes, OverloadedStrings, BangPatterns #-}
+{-# LANGUAGE QuasiQuotes, OverloadedStrings, BangPatterns, CPP #-}
 module Main (main) where
 
 import Config
@@ -61,20 +61,24 @@ instance NFData GameState where
              rnf (turn    gs) `seq`
              ()
 
+#define DEFPIECE(name) ([hashed|name|], [texRend|name|])
+
 pieceMap :: M.HashMap HashString Renderer
-pieceMap = M.fromList [ ([hashed|"piece-b-b.png"|], [texRend|"piece-b-b.png"|])
-                      , ([hashed|"piece-b-k.png"|], [texRend|"piece-b-k.png"|])
-                      , ([hashed|"piece-b-n.png"|], [texRend|"piece-b-n.png"|])
-                      , ([hashed|"piece-b-p.png"|], [texRend|"piece-b-p.png"|])
-                      , ([hashed|"piece-b-q.png"|], [texRend|"piece-b-q.png"|])
-                      , ([hashed|"piece-b-r.png"|], [texRend|"piece-b-r.png"|])
-                      , ([hashed|"piece-w-b.png"|], [texRend|"piece-w-b.png"|])
-                      , ([hashed|"piece-w-k.png"|], [texRend|"piece-w-k.png"|])
-                      , ([hashed|"piece-w-n.png"|], [texRend|"piece-w-n.png"|])
-                      , ([hashed|"piece-w-p.png"|], [texRend|"piece-w-p.png"|])
-                      , ([hashed|"piece-w-q.png"|], [texRend|"piece-w-q.png"|])
-                      , ([hashed|"piece-w-r.png"|], [texRend|"piece-w-r.png"|])
+pieceMap = M.fromList [ DEFPIECE("piece-b-b.png")
+                      , DEFPIECE("piece-b-k.png")
+                      , DEFPIECE("piece-b-n.png")
+                      , DEFPIECE("piece-b-p.png")
+                      , DEFPIECE("piece-b-q.png")
+                      , DEFPIECE("piece-b-r.png")
+                      , DEFPIECE("piece-w-b.png")
+                      , DEFPIECE("piece-w-k.png")
+                      , DEFPIECE("piece-w-n.png")
+                      , DEFPIECE("piece-w-p.png")
+                      , DEFPIECE("piece-w-q.png")
+                      , DEFPIECE("piece-w-r.png")
                       ]
+
+#undef DEFPIECE
 
 -- Get the filename of the texture to load for this piece.
 fileString :: Game.Logic.Color -> Piece -> HashString
