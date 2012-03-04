@@ -47,7 +47,7 @@ unHandle (THandle x) = x
 {-# INLINE unHandle #-}
 
 -- | A metadata wrapper around an OpenGL 'TextureObject'. Generally, you will
---   pass 'Texture' around internally, and use 'texHandle' when dealing
+--   pass 'Texture' around internally, and use texHandle when dealing
 --   with OpenGL.
 data Texture = Texture { texWidth  :: !Int -- ^ Width in pixels.
                        , texHeight :: !Int -- ^ Height in pixels.

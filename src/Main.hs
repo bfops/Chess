@@ -4,6 +4,7 @@ module Main (main) where
 import Config
 import Control.DeepSeq
 import Data.Array
+import qualified Data.Cycle as C
 import qualified Data.HashMap.Strict as M
 import Data.HashString
 import Data.List
@@ -179,7 +180,7 @@ considerMovement gs is = do tile <- clickCoords
           moveTo src tile = do gameBoard <- move (board gs) src tile
                                return $ gs { mvSrc = Nothing
                                            , board = gameBoard
-                                           , turn = cyclicNext $ turn gs
+                                           , turn = C.next $ turn gs
                                            }
 
 -- | We don't do anything... for now.
