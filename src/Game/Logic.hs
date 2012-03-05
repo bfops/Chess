@@ -113,7 +113,7 @@ isValidPosition (f, r) | f < 'A' = False
 
 -- | Initial state of the game gameBoard.
 initBoard :: Board
-{-initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
+initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
                                                                 , frontRank White
                                                                 , otherRank
                                                                 , otherRank
@@ -126,13 +126,6 @@ initBoard :: Board
                                [Rook False, Knight, Bishop, Queen, King False, Bishop, Knight, Rook False]
           frontRank color = replicate 8 $ Just (color, Pawn False)
           otherRank = replicate 8 Nothing
--}
-initBoard = (listArray (('A', 1), ('H', 8)) $ replicate 64 Nothing) // [ (('E', 1), Just (White, King False))
-                                                                       , (('H', 1), Just (White, Rook False))
-                                                                       , (('F', 8), Just (Black, Queen))
-                                                                       , (('A', 8), Just (Black, King True))
-                                                                       , (('A', 2), Just (White, Pawn False))
-                                                                       ]
 
 -- | Initial state of the game.
 initGame :: UniqueGame
