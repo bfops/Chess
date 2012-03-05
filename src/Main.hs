@@ -3,6 +3,7 @@ module Main (main) where
 
 import Config
 import Control.DeepSeq
+import Control.Monad
 import Data.Array
 import qualified Data.Cycle as C
 import qualified Data.HashMap.Strict as M
@@ -48,18 +49,16 @@ configLogger = do root <- getRootLogger
 data GameState = GameState { t0      :: !Double -- the time value of the last frame.
                            , rectPos :: Coord
                            , rectRot :: Double -- rotation of the rectangle, in radians.
-                           , board   :: Board
+                           , game    :: UniqueGame
                            , mvSrc   :: Maybe Position -- if the user's selected a piece to move,
                                                       -- they've selected the one here.
-                           , turn    :: Game.Logic.Color -- whose turn is it?
                            }
 
 instance NFData GameState where
     rnf gs = rnf (rectPos gs) `seq`
              rnf (rectRot gs) `seq`
-             rnf (board   gs) `seq`
+             rnf (game    gs) `seq`
              rnf (mvSrc   gs) `seq`
-             rnf (turn    gs) `seq`
              ()
 
 #define DEFPIECE(name) ([hashed|name|], [texRend|name|])
@@ -140,7 +139,7 @@ display gs = let rect = (rectangleRenderer 600 600 red)
                                               )
                                 , children = [ boardRender ]
                                 }
-                 boardRender = (chessBoard $ board gs)
+                 boardRender = (chessBoard . board $ game gs)
                                 { pos = Right ( HCenterAlign 0
                                               , VCenterAlign 0
                                               )
@@ -172,14 +171,14 @@ considerMovement gs is = do tile <- clickCoords
                                  else Nothing
                         else Nothing
 
-          select tile = (board gs)!tile >>= \(color, _) -> if turn gs == color
-                                                           then Just $ gs { mvSrc = Just tile }
-                                                           else Nothing
+          select tile = (board $ game gs)!tile >>= \(color, _) -> do guard $ turn (game gs) == color
+                                                                     return gs { mvSrc = Just tile }
 
-          moveTo src tile = do gameBoard <- move (board gs) src tile
+          moveTo src tile = do gameBoard <- move (board $ game gs) src tile
                                return $ gs { mvSrc = Nothing
-                                           , board = gameBoard
-                                           , turn = C.next $ turn gs
+                                           , game = (game gs) { board = gameBoard
+                                                              , turn = C.next . turn $ game gs
+                                                              } 
                                            }
 
 -- | We don't do anything... for now.
@@ -203,7 +202,7 @@ update gs !t is = let gs'  = fromMaybe gs (considerMovement gs is)
                 g0 = t0 gs
 
 initState :: GameState
-initState = GameState 0 (400, 300) 0 initBoard Nothing White
+initState = GameState 0 (400, 300) 0 initGame Nothing
 
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.

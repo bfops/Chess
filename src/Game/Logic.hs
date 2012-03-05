@@ -6,7 +6,8 @@ module Game.Logic ( Color(..)
                   , Position
                   , Tile
                   , Board
-                  , initBoard
+                  , UniqueGame(..)
+                  , initGame
                   , move
                   , shift
                   ) where
@@ -41,20 +42,32 @@ instance NFData Piece where
     rnf (King x) = x `seq` ()
     rnf    x     = x `seq` ()
 
--- | Horizontal index of a chessboard.
+-- | Horizontal index of a chessgameBoard.
 type File = Char
--- | Vertical index of a chessboard.
+-- | Vertical index of a chessgameBoard.
 type Rank = Int
--- | Describe a chessboard position.
+-- | Describe a chessgameBoard position.
 type Position = (File, Rank)
 type Delta = (Int, Int)
 
--- | A square in a chessboard either contains nothing or a colored piece.
+-- | A square in a chessgameBoard either contains nothing or a colored piece.
 type Tile = Maybe (Color, Piece)
--- | Basic board type for describing game state.
+-- | Basic gameBoard type for describing game state.
 type Board = Array Position Tile
 
--- | Initial state of the game board.
+-- | Contains all the information to uniquely describe a chess game.
+data UniqueGame = UniqueGame { board      :: Board
+                             -- ^ The current state of the board.
+                             , turn       :: Color
+                             -- ^ Whose turn is it?
+                             }
+
+instance NFData UniqueGame where
+    rnf (UniqueGame a b) = rnf a `seq`
+                           rnf b `seq`
+                           ()
+
+-- | Initial state of the game gameBoard.
 initBoard :: Board
 initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
                                                                 , frontRank White
@@ -70,29 +83,33 @@ initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
           frontRank color = replicate 8 $ Just (color, Pawn False)
           otherRank = replicate 8 Nothing
 
--- | Attempt to move the piece from `src` to `dest` on `board`.
+-- | Initial state of the game.
+initGame :: UniqueGame
+initGame = UniqueGame initBoard White
+
+-- | Attempt to move the piece from `src` to `dest` on `gameBoard`.
 move :: Board
-     -- ^ The board to move on
+     -- ^ The gameBoard to move on
      -> Position
      -- ^ The position of the piece we're moving
      -> Position
      -- ^ Position to move to
      -> Maybe Board
-     -- ^ Nothing if the move is invalid, Just the new board otherwise.
-move board src dest = do (color, piece) <- board!src
-                         guard . not . isFriendlyFire color $ board!dest
-                         guard $ dest `elem` moveAttempts board src piece
-
-                         return $ if piece == King False && src `stepTo` dest /= dest
-                                  then castle
-                                  else makeMove board src dest
+     -- ^ Nothing if the move is invalid, Just the new gameBoard otherwise.
+move gameBoard src dest = do (color, piece) <- gameBoard!src
+                             guard . not . isFriendlyFire color $ gameBoard!dest
+                             guard $ dest `elem` moveAttempts gameBoard src piece
+   
+                             return $ if piece == King False && src `stepTo` dest /= dest
+                                      then castle
+                                      else makeMove gameBoard src dest
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False (isSameColor color)
           isSameColor color = (color ==) . fst
 
           -- Walk from src towards dest (maybe passing it), and keep going until you hit the rook.
-          rookPos = last $ straightPath board src $ step src dest
-          castle = makeMove (makeMove board src dest) rookPos (dest `stepTo` src)
+          rookPos = last $ straightPath gameBoard src $ step src dest
+          castle = makeMove (makeMove gameBoard src dest) rookPos (dest `stepTo` src)
 
 zipT :: (a -> c -> r1) -> (b -> d -> r2) -> (a, b) -> (c, d) -> (r1, r2)
 zipT f g (a, b) (c, d) = (f a c, g b d)
@@ -114,23 +131,23 @@ stepTo :: Position -> Position -> Position
 stepTo x = (shift x) . (step x)
 
 isOccupied :: Board -> Position -> Bool
-isOccupied board = isJust . (board!)
+isOccupied gameBoard = isJust . (gameBoard!)
 
 isUnoccupied :: Board -> Position -> Bool
-isUnoccupied board = isNothing . (board!)
+isUnoccupied gameBoard = isNothing . (gameBoard!)
 
 -- Return a straight path from `origin` to `dest`, terminating at the edge of
--- the board, or when you hit another piece (includes that tile, doesn't include `origin`).
+-- the gameBoard, or when you hit another piece (includes that tile, doesn't include `origin`).
 straightPath :: Board -> Position -> Delta -> [Position]
-straightPath board origin d = unfoldr stepFunc . Just $ shift origin d
+straightPath gameBoard origin d = unfoldr stepFunc . Just $ shift origin d
     where stepFunc p = do pos <- p
                           guard $ isValidPosition pos
                           return (pos, next pos)
-          next p = do guard $ isUnoccupied board p
+          next p = do guard $ isUnoccupied gameBoard p
                       return $ shift p d
 
 hasEmptyPath :: Board -> Position -> Position -> Bool
-hasEmptyPath board src dest = (length $ take l $ straightPath board src $ step src dest) == l
+hasEmptyPath gameBoard src dest = (length $ take l $ straightPath gameBoard src $ step src dest) == l
     where l = on max abs dx dy
           (dx, dy) = delta src dest
 
@@ -142,8 +159,8 @@ delta = flip $ zipT ediff (-)
 
 -- Just moves the piece, no checking.
 makeMove :: Board -> Position -> Position -> Board
-makeMove board src dest = board // [ (src, Nothing)
-                                   , (dest, board!src >>= newStatus)
+makeMove gameBoard src dest = gameBoard // [ (src, Nothing)
+                                   , (dest, gameBoard!src >>= newStatus)
                                    ]
     where newStatus (color, Pawn False) = Just (color, Pawn True)
           newStatus (color, Rook False) = Just (color, Rook True)
@@ -163,23 +180,23 @@ pawnStep color = if color == White
                  else -1
 
 moveAttempts :: Board -> Position -> Piece -> [Position]
-moveAttempts board src (Pawn hasMoved) = do (condition, d) <- moves
-                                            let dest = src `shift` d
-                                            guard $ isValidPosition dest
-                                            guard $ condition dest
-                                            return dest
+moveAttempts gameBoard src (Pawn hasMoved) = do (condition, d) <- moves
+                                                let dest = src `shift` d
+                                                guard $ isValidPosition dest
+                                                guard $ condition dest
+                                                return dest
 
-    where color = fst . fromJust $ board!src
+    where color = fst . fromJust $ gameBoard!src
           doubleMove = if hasMoved
                        then Nothing
-                       else Just $ (isUnoccupied board, (0, pawnStep color * 2))
+                       else Just $ (isUnoccupied gameBoard, (0, pawnStep color * 2))
           moves = (maybe [] (:[]) doubleMove)
-                  ++ [ (isUnoccupied board, ( 0, pawnStep color))
-                     , (isOccupied   board, ( 1, pawnStep color))
-                     , (isOccupied   board, (-1, pawnStep color))
+                  ++ [ (isUnoccupied gameBoard, ( 0, pawnStep color))
+                     , (isOccupied   gameBoard, ( 1, pawnStep color))
+                     , (isOccupied   gameBoard, (-1, pawnStep color))
                      ]
 
-moveAttempts board src (Rook _) = concat $ map (straightPath board src) edges
+moveAttempts gameBoard src (Rook _) = concat $ map (straightPath gameBoard src) edges
     where edges = [ (0, 1)
                   , (0, -1)
                   , (-1, 0)
@@ -190,19 +207,21 @@ moveAttempts _ src Knight = filter isValidPosition $ map (shift src) deltas
     where ls = [(x, y) | x <- [1, -1], y <- [2, -2]]
           deltas = map swap ls ++ ls
 
-moveAttempts board src Bishop = concat $ map (straightPath board src) corners
+moveAttempts gameBoard src Bishop = concat $ map (straightPath gameBoard src) corners
     where corners = [ (x, y) | x <- [1, -1], y <- [1, -1] ]
 
-moveAttempts board src Queen = moveAttempts board src (Rook False) ++ moveAttempts board src Bishop
+moveAttempts gameBoard src Queen = moveAttempts gameBoard src (Rook False) ++ moveAttempts gameBoard src Bishop
 
-moveAttempts board src@(_, r) (King moved) = castles ++ filter isValidPosition moves
+moveAttempts gameBoard src@(_, r) (King moved) = castles ++ filter isValidPosition moves
     where moves = map (shift src) deltas
           deltas = [ (x, y) | x <- [-1 .. 1], y <- [-1 .. 1] ]
 
           castles = [ src `castleTo` p | p <- rookPos, canCastleTo p ]
 
-          color = fst . fromJust $ board!src
-          canCastleTo p = not moved && hasEmptyPath board src (stepTo p src) && maybe False isCastleReceiver (board!p)
+          color = fst . fromJust $ gameBoard!src
+          canCastleTo p = not moved
+                        && hasEmptyPath gameBoard src (stepTo p src)
+                        && maybe False isCastleReceiver (gameBoard!p)
           isCastleReceiver (c, p) = c == color && p == Rook False
           castleTo p1 p2 = stepTo (stepTo p1 p2) p2
 
