@@ -92,6 +92,16 @@ initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
 initGame :: UniqueGame
 initGame = UniqueGame initBoard Nothing White
 
+-- True iff `color` is in check on `board`.
+isCheck :: Color -> UniqueGame -> Bool
+isCheck color game = any threatensKing . indices $ board game
+    where threatensKing pos = isJust $ move game pos kingPos
+          kingPos = case filter (isKing.snd) . assocs $ board game of
+                        [] -> error "Error: No king!"
+                        (pos, _):_ -> pos
+          isKing (Just (c, (King _))) = c == color
+          isKing _ = False
+
 -- | Attempt to move the piece from `src` to `dest` on `gameBoard`.
 move :: UniqueGame
      -- ^ The gameBoard to move on
@@ -105,15 +115,18 @@ move game src dest = do (color, piece) <- gameBoard!src
                         guard . not . isFriendlyFire color $ gameBoard!dest
                         guard $ dest `elem` moveAttempts game src piece
 
-                        let newGame | piece == King False && (not $ within 1) = castle
-                                    | piece == Pawn False && (not $ within 1) = makePassant
-                                    | piece == Pawn True && isUnoccupied gameBoard dest = enactPassant
-                                    | otherwise = id
+                        let updateGame | piece == King False && (not $ within 1) = castle
+                                       | piece == Pawn False && (not $ within 1) = makePassant
+                                       | piece == Pawn True && isUnoccupied gameBoard dest = enactPassant
+                                       | otherwise = id
    
-                        return $ newGame game { board = makeMove gameBoard src dest
-                                              , turn = next $ turn game
-                                              , enPassant = Nothing
-                                              }
+                            newGame = updateGame game { board = makeMove gameBoard src dest
+                                                      , turn = next $ turn game
+                                                      , enPassant = Nothing
+                                                      }
+                        guard . not $ isCheck color newGame
+                        return newGame
+
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False (isSameColor color)
           isSameColor color = (color ==) . fst
