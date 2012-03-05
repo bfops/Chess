@@ -12,6 +12,7 @@ import Data.Maybe
 import Game.Engine
 import Game.Input
 import Game.Logic
+import Game.Physics.Collision()
 import Game.Render
 import Game.Render.Colors
 import Game.Resource.Loader
