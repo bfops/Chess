@@ -8,15 +8,16 @@ module Game.Logic ( Color(..)
                   , Board
                   , initBoard
                   , move
+                  , shift
                   ) where
 
-import Control.Arrow
 import Control.DeepSeq
 import Control.Monad
 import Data.Array.IArray
 import Data.Function
 import Data.Maybe
 import Data.List
+import Data.Tuple
 
 -- | Color of game pieces.
 data Color = White | Black
@@ -80,29 +81,64 @@ move :: Board
      -- ^ Nothing if the move is invalid, Just the new board otherwise.
 move board src dest = do (color, piece) <- board!src
                          guard . not . isFriendlyFire color $ board!dest
-                         tryMove board src dest piece
+                         guard $ dest `elem` moveAttempts board src piece
+
+                         return $ if piece == King False && src `stepTo` dest /= dest
+                                  then castle
+                                  else makeMove board src dest
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False (isSameColor color)
           isSameColor color = (color ==) . fst
 
-tupleApply :: (a -> c -> r1) -> (b -> d -> r2) -> (a, b) -> (c, d) -> (r1, r2)
-tupleApply f g (a, b) (c, d) = (f a c, g b d)
+          -- Walk from src towards dest (maybe passing it), and keep going until you hit the rook.
+          rookPos = last $ straightPath board src $ step src dest
+          castle = makeMove (makeMove board src dest) rookPos (dest `stepTo` src)
 
-step :: (Ord a, Enum a, Ord b, Enum b) => (a, b) -> (a, b) -> (a, b)
-step = tupleApply step' step'
-    where step' :: (Ord c, Enum c) => c -> c -> c
-          step' x y | x < y = succ x
-                    | x > y = pred x
-                    | otherwise = x
+zipT :: (a -> c -> r1) -> (b -> d -> r2) -> (a, b) -> (c, d) -> (r1, r2)
+zipT f g (a, b) (c, d) = (f a c, g b d)
+
+cshift :: (Enum a) => a -> Int -> a
+cshift x y = toEnum $ fromEnum x + y
+
+shift :: (Enum a) => (a, Int) -> (Int, Int) -> (a, Int)
+shift = zipT cshift (+)
+
+step :: Position -> Position -> Delta
+step = zipT step' step'
+    where step' x y | x < y = 1
+                    | x > y = -1
+                    | otherwise = 0
+
+-- Take one step from x towards y.
+stepTo :: Position -> Position -> Position
+stepTo x = (shift x) . (step x)
+
+isOccupied :: Board -> Position -> Bool
+isOccupied board = isJust . (board!)
+
+isUnoccupied :: Board -> Position -> Bool
+isUnoccupied board = isNothing . (board!)
+
+-- Return a straight path from `origin` to `dest`, terminating at the edge of
+-- the board, or when you hit another piece (includes that tile, doesn't include `origin`).
+straightPath :: Board -> Position -> Delta -> [Position]
+straightPath board origin d = unfoldr stepFunc . Just $ shift origin d
+    where stepFunc p = do pos <- p
+                          guard $ isValidPosition pos
+                          return (pos, next pos)
+          next p = do guard $ isUnoccupied board p
+                      return $ shift p d
 
 hasEmptyPath :: Board -> Position -> Position -> Bool
-hasEmptyPath board origin dest = all isNothing $ map (board!) path
-    where path = unfoldr unfoldStep $ step origin dest
-          unfoldStep pos = if pos == dest then Nothing
-                           else Just (pos, step pos dest)
+hasEmptyPath board src dest = (length $ take l $ straightPath board src $ step src dest) == l
+    where l = on max abs dx dy
+          (dx, dy) = delta src dest
+
+ediff :: Enum a => a -> a -> Int
+ediff = (-) `on` fromEnum
 
 delta :: Position -> Position -> Delta
-delta = flip $ tupleApply ((-) `on` fromEnum) (-)
+delta = flip $ zipT ediff (-)
 
 -- Just moves the piece, no checking.
 makeMove :: Board -> Position -> Position -> Board
@@ -114,90 +150,63 @@ makeMove board src dest = board // [ (src, Nothing)
           newStatus (color, King False) = Just (color, King True)
           newStatus x = Just x
 
-isDiagonal :: Delta -> Bool
-isDiagonal (0, 0) = False
-isDiagonal (x, y) = abs x == abs y
+isValidPosition :: Position -> Bool
+isValidPosition (f, r) | f < 'A' = False
+                       | f > 'H' = False
+                       | r < 1 = False
+                       | r > 8 = False
+                       | otherwise = True
 
-isStraightLine :: Delta -> Bool
-isStraightLine l = (fst l == 0) /= (snd l == 0)
-
-firstOf :: [Maybe a] -> Maybe a
-firstOf lst = case filter isJust lst of
-    [] -> Nothing
-    x:_ -> x
-
-pawnStep :: Game.Logic.Color -> (Int, Int)
+pawnStep :: Game.Logic.Color -> Int
 pawnStep color = if color == White
-                 then (0, 1)
-                 else (0, -1)
+                 then 1
+                 else -1
 
-tryMove :: Board -> Position -> Position -> Piece -> Maybe Board
-tryMove board src dest (Pawn True) = do guard $ takeTest || moveTest && normalTest
-                                        return (makeMove board src dest)
+moveAttempts :: Board -> Position -> Piece -> [Position]
+moveAttempts board src (Pawn hasMoved) = do (condition, d) <- moves
+                                            let dest = src `shift` d
+                                            guard $ isValidPosition dest
+                                            guard $ condition dest
+                                            return dest
 
-                        -- tryMove is only called when board!src exists.
     where color = fst . fromJust $ board!src
-          -- change in position from our move.
-          mvDelta = delta src dest
+          doubleMove = if hasMoved
+                       then Nothing
+                       else Just $ (isUnoccupied board, (0, pawnStep color * 2))
+          moves = (maybe [] (:[]) doubleMove)
+                  ++ [ (isUnoccupied board, ( 0, pawnStep color))
+                     , (isOccupied   board, ( 1, pawnStep color))
+                     , (isOccupied   board, (-1, pawnStep color))
+                     ]
 
-          takeTest = (isJust $ board!dest)
-                   && (abs $ fst mvDelta) == 1
-                   && snd mvDelta == snd (pawnStep color)
-          moveTest = isNothing (board!dest)
-          normalTest = mvDelta == pawnStep color
+moveAttempts board src (Rook _) = concat $ map (straightPath board src) edges
+    where edges = [ (0, 1)
+                  , (0, -1)
+                  , (-1, 0)
+                  , (1, 0)
+                  ]
 
-tryMove board src dest (Pawn False) = firstOf [ tryMove board src dest (Pawn True)
-                                              , do guard $ delta src dest == second (*2) (pawnStep color)
-                                                   guard . isNothing $ board!dest
-                                                   guard $ hasEmptyPath board src dest
-                                                   return $ makeMove board src dest
-                                              ]
-    where color = fst . fromJust $ board!src
+moveAttempts _ src Knight = filter isValidPosition $ map (shift src) deltas
+    where ls = [(x, y) | x <- [1, -1], y <- [2, -2]]
+          deltas = map swap ls ++ ls
 
-tryMove board src dest (Rook _) = do guard . isStraightLine $ delta src dest
-                                     guard $ hasEmptyPath board src dest
-                                     return $ makeMove board src dest
+moveAttempts board src Bishop = concat $ map (straightPath board src) corners
+    where corners = [ (x, y) | x <- [1, -1], y <- [1, -1] ]
 
-tryMove board src dest Knight = do guard $ isL mvScalar
-                                   return $ makeMove board src dest
-    where isL (2, 1) = True
-          isL (1, 2) = True
-          isL _ = False
-          mvScalar = (abs *** abs) (delta src dest)
+moveAttempts board src Queen = moveAttempts board src (Rook False) ++ moveAttempts board src Bishop
 
-tryMove board src dest Bishop = do guard . isDiagonal $ delta src dest
-                                   guard $ hasEmptyPath board src dest
-                                   return $ makeMove board src dest
+moveAttempts board src@(_, r) (King moved) = castles ++ filter isValidPosition moves
+    where moves = map (shift src) deltas
+          deltas = [ (x, y) | x <- [-1 .. 1], y <- [-1 .. 1] ]
 
-tryMove board src dest Queen = do guard $ isDiagonal mvDelta || isStraightLine mvDelta
-                                  guard $ hasEmptyPath board src dest
-                                  return $ makeMove board src dest
-    where mvDelta = delta src dest
+          castles = [ src `castleTo` p | p <- rookPos, canCastleTo p ]
 
-tryMove board src dest (King True) = do guard $ abs x + abs y == 1
-                                        return $ makeMove board src dest
-    where (x, y) = delta src dest
-
-tryMove board src dest (King False) = firstOf [ tryMove board src dest (King True)
-                                              , liftM castle $ guard (hasEmptyPath board src dest)
-                                                             >> getRookPos
-                                              ]
-    where mvDelta = delta src dest
           color = fst . fromJust $ board!src
-          rookRank = if color == White
-                     then 1
-                     else 8
+          canCastleTo p = not moved && hasEmptyPath board src (stepTo p src) && maybe False isCastleReceiver (board!p)
+          isCastleReceiver (c, p) = c == color && p == Rook False
+          castleTo p1 p2 = stepTo (stepTo p1 p2) p2
 
-          getRookPos = case filter castleTest [ ((-2, 0), ('A', rookRank))
-                                              , ((2, 0) , ('H', rookRank))
-                                              ] of
-                            [] -> Nothing
-                            (_, rookPos):_ -> Just rookPos
-
-          castleTest (d, rookPos) = mvDelta == d
-                                  && isJust (liftM ((Rook False ==) . snd) $ board!rookPos)
-
-          rookDelta = first (`div` (-2)) mvDelta
-          rookDest = tupleApply (\x y -> toEnum $ fromEnum x + y) (+) dest rookDelta
-          castle rookPos = makeMove (makeMove board src dest) rookPos rookDest
+          rookPos = [ ('A', r)
+                    , ('H', r)
+                    ]
 
