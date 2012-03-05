@@ -75,14 +75,19 @@ obbBadInput = error "We don't define OBB-point intersections for any dimensions 
 
 instance Intersectable OBB Point where
     intersects (OBB [Point w, Point x, Point y, Point z]) (Point p)
-                   | dim p /= 2 = obbBadInput
+                   | any (/= 2) [ dp, dw, dx, dy, dz ] = obbBadInput
                    | otherwise = all (>= 0) [ p `sub` w <.> x `sub` w
                                            , p `sub` x <.> y `sub` x
                                            , p `sub` y <.> z `sub` y
                                            , p `sub` z <.> w `sub` z
                                            ]
+        where
+            dp = dim p
+            dw = dim w
+            dx = dim x
+            dy = dim y
+            dz = dim z
     intersects _ _ = obbBadInput
-    {-# INLINE intersects #-}
 
 instance Intersectable Point OBB where
     intersects x y = intersects y x

@@ -180,7 +180,7 @@ move' game src dest = do (color, piece) <- gameBoard!src
           gameBoard = board game
 
           -- Walk from src towards dest (maybe passing it), and keep going until you hit the rook.
-          rookPos = last $ straightPath gameBoard src $ step src dest
+          rookPos = last . straightPath gameBoard src $ step src dest
           castle g = g { board = makeMove (board g) rookPos (dest `stepTo` src) }
 
           makePassant g = g { enPassant = Just $ src `stepTo` dest }
@@ -235,7 +235,7 @@ moveAttempts game src (Pawn hasMoved) = do (condition, d) <- moves
 
           canEnPassant p = fromMaybe False $ (p ==) <$> enPassant game
 
-          moves = (maybe [] (:[]) doubleMove)
+          moves = maybeToList doubleMove
                 ++ [ (             isUnoccupied gameBoard,               ( 0, pawnStep color))
                    , (liftA2 (||) (isOccupied   gameBoard) canEnPassant, ( 1, pawnStep color))
                    , (liftA2 (||) (isOccupied   gameBoard) canEnPassant, (-1, pawnStep color))
@@ -245,7 +245,7 @@ moveAttempts game src (Pawn hasMoved) = do (condition, d) <- moves
                          then 1
                          else -1
 
-moveAttempts game src (Rook _) = concat $ map (straightPath (board game) src) edges
+moveAttempts game src (Rook _) = concatMap (straightPath (board game) src) edges
     where edges = [ (0, 1)
                   , (0, -1)
                   , (-1, 0)
@@ -256,7 +256,7 @@ moveAttempts _ src Knight = filter isValidPosition $ map (shift src) deltas
     where ls = [(x, y) | x <- [1, -1], y <- [2, -2]]
           deltas = map swap ls ++ ls
 
-moveAttempts game src Bishop = concat $ map (straightPath (board game) src) corners
+moveAttempts game src Bishop = concatMap (straightPath (board game) src) corners
     where corners = [ (x, y) | x <- [1, -1], y <- [1, -1] ]
 
 moveAttempts game src Queen = moveAttempts game src (Rook False) ++ moveAttempts game src Bishop
@@ -285,5 +285,5 @@ moveAttempts game src@(_, r) (King moved) = castles ++ filter isValidPosition mo
                              && all (not . isCheck color . makeMove gameBoard src) path
             where l = on max abs dx dy
                   (dx, dy) = delta src dest
-                  path = take l $ straightPath gameBoard src $ step src dest
+                  path = take l . straightPath gameBoard src $ step src dest
 
