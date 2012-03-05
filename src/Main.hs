@@ -3,8 +3,8 @@ module Main (main) where
 
 import Config
 import Control.DeepSeq
+import Control.Monad
 import Data.Array
-import qualified Data.Cycle as C
 import qualified Data.HashMap.Strict as M
 import Data.HashString
 import Data.List
@@ -49,18 +49,16 @@ configLogger = do root <- getRootLogger
 data GameState = GameState { t0      :: !Double -- the time value of the last frame.
                            , rectPos :: Coord
                            , rectRot :: Double -- rotation of the rectangle, in radians.
-                           , board   :: Board
+                           , game    :: UniqueGame
                            , mvSrc   :: Maybe Position -- if the user's selected a piece to move,
                                                       -- they've selected the one here.
-                           , turn    :: Game.Logic.Color -- whose turn is it?
                            }
 
 instance NFData GameState where
     rnf gs = rnf (rectPos gs) `seq`
              rnf (rectRot gs) `seq`
-             rnf (board   gs) `seq`
+             rnf (game    gs) `seq`
              rnf (mvSrc   gs) `seq`
-             rnf (turn    gs) `seq`
              ()
 
 #define DEFPIECE(name) ([hashed|name|], [texRend|name|])
@@ -90,9 +88,9 @@ fileString c p = toHashString $ "piece-" ++ (colorString c) ++ "-" ++ (pieceStri
 
           pieceString (Pawn _) = "p"
           pieceString (Rook _) = "r"
-          pieceString Knight = "n"
-          pieceString Bishop = "b"
-          pieceString Queen = "q"
+          pieceString Knight   = "n"
+          pieceString Bishop   = "b"
+          pieceString Queen    = "q"
           pieceString (King _) = "k"
 
 -- Prevents recomputation of our piece hashstrings.
@@ -113,15 +111,15 @@ chessBoard gameBoard | rendDims w /= rendDims b = error "White and black square 
 
         tileRender :: Coord -> Renderer
         tileRender p@(x, y) = checkerRender `atIndex` p
-                                            `withChildren` (pieceRender $ gameBoard!(toEnum $ x + 65, y + 1))
+                                            `withChildren` (renderTileContents $ gameBoard!(shift ('A', 1) p))
             where checkerRender |     evenx &&     eveny = b
                                 | not evenx && not eveny = b
                                 | otherwise              = w
                   evenx = even x
                   eveny = even y
-                  pieceRender Nothing = []
-                  pieceRender (Just (c, pce)) = [(fromJust $ M.lookup (fileString c pce) pieceMap)
-                                                    { pos = Right (HCenterAlign 0, VCenterAlign 0) }]
+                  renderTileContents = maybe [] renderPiece
+                  renderPiece (c, pce) = [(fromJust $ M.lookup (fileString c pce) pieceMap)
+                                            { pos = Right (HCenterAlign 0, VCenterAlign 0) }]
 
         withPosition :: Renderer -> Coord -> Renderer
         withPosition r c = r { pos = Left c }
@@ -141,7 +139,7 @@ display gs = let rect = (rectangleRenderer 600 600 red)
                                               )
                                 , children = [ boardRender ]
                                 }
-                 boardRender = (chessBoard $ board gs)
+                 boardRender = (chessBoard . board $ game gs)
                                 { pos = Right ( HCenterAlign 0
                                               , VCenterAlign 0
                                               )
@@ -169,24 +167,21 @@ considerMovement gs is = do tile <- clickCoords
                         then let (x, y) = mousePos is
                              in if x >= 144 && x < 800 - 144
                                 && y >=  44 && y < 600 -  44
-                                 then Just (toEnum $ (x - 144) `div` 64 + 65,
-                                            toEnum $ (y -  44) `div` 64 + 1)
+                                 then Just $ shift ('A', 1) ((x - 144) `div` 64, (y - 44) `div` 64)
                                  else Nothing
                         else Nothing
 
-          select tile = (board gs)!tile >>= \(color, _) -> if turn gs == color
-                                                           then Just $ gs { mvSrc = Just tile }
-                                                           else Nothing
+          select tile = (board $ game gs)!tile >>= \(color, _) -> do guard $ turn (game gs) == color
+                                                                     return gs { mvSrc = Just tile }
 
-          moveTo src tile = do gameBoard <- move (board gs) src tile
+          moveTo src tile = do gameState <- move (game gs) src tile
                                return $ gs { mvSrc = Nothing
-                                           , board = gameBoard
-                                           , turn = C.next $ turn gs
+                                           , game = gameState 
                                            }
 
 -- | We don't do anything... for now.
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Renderer)
-update gs !t is = let gs'  = maybe gs id (considerMovement gs is)
+update gs !t is = let gs'  = fromMaybe gs (considerMovement gs is)
                       gs'' = gs' { t0 = t
                                  --, rectPos = solveNewPos (rectPos gs) is
                                  , rectRot = solveNewRot (rectRot gs) dt is
@@ -205,10 +200,10 @@ update gs !t is = let gs'  = maybe gs id (considerMovement gs is)
                 g0 = t0 gs
 
 initState :: GameState
-initState = GameState 0 (400, 300) 0 initBoard Nothing White
+initState = GameState 0 (400, 300) 0 initGame Nothing
 
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.
 main :: IO ()
-main = do configLogger
-          runGame Config.windowTitle initState update
+main = configLogger
+     >> runGame Config.windowTitle initState update
