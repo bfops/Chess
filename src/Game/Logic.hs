@@ -133,14 +133,17 @@ initGame = UniqueGame initBoard Nothing White
 
 -- True iff `color` is in check on `board`.
 isCheck :: Color -> Board -> Bool
-isCheck color gameBoard = case filter (isKing.snd) $ assocs gameBoard of
+isCheck color gameBoard = case filter (isMyKing.snd) $ assocs gameBoard of
                             [] -> True
                             (kingPos, _):_ -> any (threatens kingPos) $ indices gameBoard
-    where isKing (Just (c, (King _))) = c == color
+    where isMyKing (Just (c, p)) = c == color && isKing p
+          isMyKing _ = False
+          isKing (King _) = True
           isKing _ = False
-          threatens pos p = isJust $ gameBoard!p
-                                   >>= guard . (color /=) . fst
-                                   >> move' shallowGame p pos
+          threatens pos p = isJust $ do (c, piece) <- gameBoard!p
+                                        guard $ color /= c
+                                        guard . not $ isKing piece
+                                        move' shallowGame p pos
           shallowGame = UniqueGame { board = gameBoard
                                    , enPassant = Nothing
                                    , turn = next color
@@ -267,6 +270,7 @@ moveAttempts game src@(_, r) (King moved) = castles ++ filter isValidPosition mo
 
           color = fst . fromJust $ gameBoard!src
           canCastleTo p = not moved
+                        && not (isCheck color gameBoard)
                         && hasCastlePath (p `stepTo` src)
                         && maybe False isCastleReceiver (gameBoard!p)
           isCastleReceiver (c, p) = c == color && p == Rook False
