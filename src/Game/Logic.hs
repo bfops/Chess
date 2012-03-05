@@ -94,11 +94,10 @@ initGame = UniqueGame initBoard Nothing White
 
 -- True iff `color` is in check on `board`.
 isCheck :: Color -> UniqueGame -> Bool
-isCheck color game = any threatensKing . indices $ board game
-    where threatensKing pos = isJust $ move game pos kingPos
-          kingPos = case filter (isKing.snd) . assocs $ board game of
-                        [] -> error "Error: No king!"
-                        (pos, _):_ -> pos
+isCheck color game = case filter (isKing.snd) . assocs $ board game of
+                        [] -> True
+                        (kingPos, _):_ -> any (threatensKing kingPos) . indices $ board game
+    where threatensKing k pos = isJust $ move game pos k
           isKing (Just (c, (King _))) = c == color
           isKing _ = False
 
