@@ -89,9 +89,9 @@ fileString c p = toHashString $ "piece-" ++ (colorString c) ++ "-" ++ (pieceStri
 
           pieceString (Pawn _) = "p"
           pieceString (Rook _) = "r"
-          pieceString Knight = "n"
-          pieceString Bishop = "b"
-          pieceString Queen = "q"
+          pieceString Knight   = "n"
+          pieceString Bishop   = "b"
+          pieceString Queen    = "q"
           pieceString (King _) = "k"
 
 -- Prevents recomputation of our piece hashstrings.
@@ -112,15 +112,15 @@ chessBoard gameBoard | rendDims w /= rendDims b = error "White and black square 
 
         tileRender :: Coord -> Renderer
         tileRender p@(x, y) = checkerRender `atIndex` p
-                                            `withChildren` (pieceRender $ gameBoard!(toEnum $ x + 65, y + 1))
+                                            `withChildren` (renderTileContents $ gameBoard!(shift ('A', 1) p))
             where checkerRender |     evenx &&     eveny = b
                                 | not evenx && not eveny = b
                                 | otherwise              = w
                   evenx = even x
                   eveny = even y
-                  pieceRender Nothing = []
-                  pieceRender (Just (c, pce)) = [(fromJust $ M.lookup (fileString c pce) pieceMap)
-                                                    { pos = Right (HCenterAlign 0, VCenterAlign 0) }]
+                  renderTileContents = maybe [] renderPiece
+                  renderPiece (c, pce) = [(fromJust $ M.lookup (fileString c pce) pieceMap)
+                                            { pos = Right (HCenterAlign 0, VCenterAlign 0) }]
 
         withPosition :: Renderer -> Coord -> Renderer
         withPosition r c = r { pos = Left c }
@@ -168,8 +168,7 @@ considerMovement gs is = do tile <- clickCoords
                         then let (x, y) = mousePos is
                              in if x >= 144 && x < 800 - 144
                                 && y >=  44 && y < 600 -  44
-                                 then Just (toEnum $ (x - 144) `div` 64 + 65,
-                                            toEnum $ (y -  44) `div` 64 + 1)
+                                 then Just $ shift ('A', 1) ((x - 144) `div` 64, (y - 44) `div` 64)
                                  else Nothing
                         else Nothing
 
@@ -185,7 +184,7 @@ considerMovement gs is = do tile <- clickCoords
 
 -- | We don't do anything... for now.
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Renderer)
-update gs !t is = let gs'  = maybe gs id (considerMovement gs is)
+update gs !t is = let gs'  = fromMaybe gs (considerMovement gs is)
                       gs'' = gs' { t0 = t
                                  --, rectPos = solveNewPos (rectPos gs) is
                                  , rectRot = solveNewRot (rectRot gs) dt is
@@ -209,5 +208,5 @@ initState = GameState 0 (400, 300) 0 initBoard Nothing White
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.
 main :: IO ()
-main = do configLogger
-          runGame Config.windowTitle initState update
+main = configLogger
+     >> runGame Config.windowTitle initState update
