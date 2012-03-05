@@ -13,6 +13,7 @@ module Game.Logic ( Color(..)
                   ) where
 
 import Control.Applicative
+import Control.Arrow
 import Control.DeepSeq
 import Control.Monad
 import Data.Array.IArray
@@ -71,6 +72,44 @@ instance NFData UniqueGame where
                              rnf b `seq`
                              rnf c `seq`
                              ()
+
+zipT :: (a -> c -> r1) -> (b -> d -> r2) -> (a, b) -> (c, d) -> (r1, r2)
+zipT f g (a, b) (c, d) = (f a c, g b d)
+
+cshift :: (Enum a) => a -> Int -> a
+cshift x y = toEnum $ fromEnum x + y
+
+shift :: (Enum a) => (a, Int) -> (Int, Int) -> (a, Int)
+shift = zipT cshift (+)
+
+step :: Position -> Position -> (Delta, Delta)
+step = zipT step' step'
+    where step' x y | x < y = 1
+                    | x > y = -1
+                    | otherwise = 0
+
+-- Take one step from x towards y.
+stepTo :: Position -> Position -> Position
+stepTo x = (shift x) . (step x)
+
+isOccupied :: Board -> Position -> Bool
+isOccupied gameBoard = isJust . (gameBoard!)
+
+isUnoccupied :: Board -> Position -> Bool
+isUnoccupied gameBoard = isNothing . (gameBoard!)
+
+ediff :: Enum a => a -> a -> Int
+ediff = (-) `on` fromEnum
+
+delta :: Position -> Position -> (Delta, Delta)
+delta = flip $ zipT ediff (-)
+
+isValidPosition :: Position -> Bool
+isValidPosition (f, r) | f < 'A' = False
+                       | f > 'H' = False
+                       | r < 1 = False
+                       | r > 8 = False
+                       | otherwise = True
 
 -- | Initial state of the game gameBoard.
 initBoard :: Board
@@ -147,31 +186,6 @@ move game src dest = do (color, piece) <- gameBoard!src
           makePassant g = g { enPassant = Just $ src `stepTo` dest }
           enactPassant g = g { board = board g // [ ((fst dest, snd src), Nothing) ] }
 
-zipT :: (a -> c -> r1) -> (b -> d -> r2) -> (a, b) -> (c, d) -> (r1, r2)
-zipT f g (a, b) (c, d) = (f a c, g b d)
-
-cshift :: (Enum a) => a -> Int -> a
-cshift x y = toEnum $ fromEnum x + y
-
-shift :: (Enum a) => (a, Int) -> (Int, Int) -> (a, Int)
-shift = zipT cshift (+)
-
-step :: Position -> Position -> (Delta, Delta)
-step = zipT step' step'
-    where step' x y | x < y = 1
-                    | x > y = -1
-                    | otherwise = 0
-
--- Take one step from x towards y.
-stepTo :: Position -> Position -> Position
-stepTo x = (shift x) . (step x)
-
-isOccupied :: Board -> Position -> Bool
-isOccupied gameBoard = isJust . (gameBoard!)
-
-isUnoccupied :: Board -> Position -> Bool
-isUnoccupied gameBoard = isNothing . (gameBoard!)
-
 -- Return a straight path from `origin` to `dest`, terminating at the edge of
 -- the gameBoard, or when you hit another piece (includes that tile, doesn't include `origin`).
 straightPath :: Board -> Position -> (Delta, Delta) -> [Position]
@@ -188,28 +202,15 @@ hasEmptyPath gameBoard src dest = l == 0 || length path == l && isUnoccupied gam
           (dx, dy) = delta src dest
           path = take l $ straightPath gameBoard src $ step src dest
 
-ediff :: Enum a => a -> a -> Int
-ediff = (-) `on` fromEnum
-
-delta :: Position -> Position -> (Delta, Delta)
-delta = flip $ zipT ediff (-)
-
 -- Just moves the piece, no checking.
 makeMove :: Board -> Position -> Position -> Board
 makeMove gameBoard src dest = gameBoard // [ (src, Nothing)
-                                           , (dest, gameBoard!src >>= newStatus)
+                                           , (dest, gameBoard!src >>= Just . second newStatus)
                                            ]
-    where newStatus (color, Pawn False) = Just (color, Pawn True)
-          newStatus (color, Rook False) = Just (color, Rook True)
-          newStatus (color, King False) = Just (color, King True)
-          newStatus x = Just x
-
-isValidPosition :: Position -> Bool
-isValidPosition (f, r) | f < 'A' = False
-                       | f > 'H' = False
-                       | r < 1 = False
-                       | r > 8 = False
-                       | otherwise = True
+    where newStatus (Pawn False) = Pawn True
+          newStatus (Rook False) = Rook True
+          newStatus (King False) = King True
+          newStatus x = x
 
 moveAttempts :: UniqueGame -> Position -> Piece -> [Position]
 moveAttempts game src (Pawn hasMoved) = do (condition, d) <- moves
