@@ -5,7 +5,6 @@ import Config
 import Control.DeepSeq
 import Control.Monad
 import Data.Array
-import qualified Data.Cycle as C
 import qualified Data.HashMap.Strict as M
 import Data.HashString
 import Data.List
@@ -174,11 +173,9 @@ considerMovement gs is = do tile <- clickCoords
           select tile = (board $ game gs)!tile >>= \(color, _) -> do guard $ turn (game gs) == color
                                                                      return gs { mvSrc = Just tile }
 
-          moveTo src tile = do gameBoard <- move (board $ game gs) src tile
+          moveTo src tile = do gameState <- move (game gs) src tile
                                return $ gs { mvSrc = Nothing
-                                           , game = (game gs) { board = gameBoard
-                                                              , turn = C.next . turn $ game gs
-                                                              } 
+                                           , game = gameState 
                                            }
 
 -- | We don't do anything... for now.

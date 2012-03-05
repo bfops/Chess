@@ -15,6 +15,7 @@ module Game.Logic ( Color(..)
 import Control.DeepSeq
 import Control.Monad
 import Data.Array.IArray
+import Data.Cycle
 import Data.Function
 import Data.Maybe
 import Data.List
@@ -58,14 +59,17 @@ type Board = Array Position Tile
 -- | Contains all the information to uniquely describe a chess game.
 data UniqueGame = UniqueGame { board      :: Board
                              -- ^ The current state of the board.
+                             , enPassant :: Maybe Position
+                             -- ^ The position eligable for taking under en passant.
                              , turn       :: Color
                              -- ^ Whose turn is it?
                              }
 
 instance NFData UniqueGame where
-    rnf (UniqueGame a b) = rnf a `seq`
-                           rnf b `seq`
-                           ()
+    rnf (UniqueGame a b c) = rnf a `seq`
+                             rnf b `seq`
+                             rnf c `seq`
+                             ()
 
 -- | Initial state of the game gameBoard.
 initBoard :: Board
@@ -85,27 +89,31 @@ initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
 
 -- | Initial state of the game.
 initGame :: UniqueGame
-initGame = UniqueGame initBoard White
+initGame = UniqueGame initBoard Nothing White
 
 -- | Attempt to move the piece from `src` to `dest` on `gameBoard`.
-move :: Board
+move :: UniqueGame
      -- ^ The gameBoard to move on
      -> Position
      -- ^ The position of the piece we're moving
      -> Position
      -- ^ Position to move to
-     -> Maybe Board
+     -> Maybe UniqueGame
      -- ^ Nothing if the move is invalid, Just the new gameBoard otherwise.
-move gameBoard src dest = do (color, piece) <- gameBoard!src
-                             guard . not . isFriendlyFire color $ gameBoard!dest
-                             guard $ dest `elem` moveAttempts gameBoard src piece
+move game src dest = do (color, piece) <- gameBoard!src
+                        guard . not . isFriendlyFire color $ gameBoard!dest
+                        guard $ dest `elem` moveAttempts gameBoard src piece
    
-                             return $ if piece == King False && src `stepTo` dest /= dest
-                                      then castle
-                                      else makeMove gameBoard src dest
+                        return game { board = if piece == King False && src `stepTo` dest /= dest
+                                              then castle
+                                              else makeMove gameBoard src dest
+                                    , turn = next $ turn game
+                                    }
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False (isSameColor color)
           isSameColor color = (color ==) . fst
+
+          gameBoard = board game
 
           -- Walk from src towards dest (maybe passing it), and keep going until you hit the rook.
           rookPos = last $ straightPath gameBoard src $ step src dest
@@ -142,9 +150,9 @@ straightPath :: Board -> Position -> Delta -> [Position]
 straightPath gameBoard origin d = unfoldr stepFunc . Just $ shift origin d
     where stepFunc p = do pos <- p
                           guard $ isValidPosition pos
-                          return (pos, next pos)
-          next p = do guard $ isUnoccupied gameBoard p
-                      return $ shift p d
+                          return (pos, nextPos pos)
+          nextPos p = do guard $ isUnoccupied gameBoard p
+                         return $ shift p d
 
 hasEmptyPath :: Board -> Position -> Position -> Bool
 hasEmptyPath gameBoard src dest = (length $ take l $ straightPath gameBoard src $ step src dest) == l
