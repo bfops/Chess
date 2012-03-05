@@ -12,6 +12,7 @@ module Game.Logic ( Color(..)
                   , shift
                   ) where
 
+import Control.Applicative
 import Control.DeepSeq
 import Control.Monad
 import Data.Array.IArray
@@ -49,7 +50,7 @@ type File = Char
 type Rank = Int
 -- | Describe a chessgameBoard position.
 type Position = (File, Rank)
-type Delta = (Int, Int)
+type Delta = Int
 
 -- | A square in a chessgameBoard either contains nothing or a colored piece.
 type Tile = Maybe (Color, Piece)
@@ -59,7 +60,7 @@ type Board = Array Position Tile
 -- | Contains all the information to uniquely describe a chess game.
 data UniqueGame = UniqueGame { board      :: Board
                              -- ^ The current state of the board.
-                             , enPassant :: Maybe Position
+                             , enPassant  :: Maybe Position
                              -- ^ The position eligable for taking under en passant.
                              , turn       :: Color
                              -- ^ Whose turn is it?
@@ -102,22 +103,37 @@ move :: UniqueGame
      -- ^ Nothing if the move is invalid, Just the new gameBoard otherwise.
 move game src dest = do (color, piece) <- gameBoard!src
                         guard . not . isFriendlyFire color $ gameBoard!dest
-                        guard $ dest `elem` moveAttempts gameBoard src piece
+                        guard $ dest `elem` moveAttempts game src piece
+
+                        let newGame | piece == King False && (not $ within 1) = castle
+                                    | piece == Pawn False && (not $ within 1) = makePassant
+                                    | piece == Pawn True && isUnoccupied gameBoard dest = enactPassant
+                                    | otherwise = id
    
-                        return game { board = if piece == King False && src `stepTo` dest /= dest
-                                              then castle
-                                              else makeMove gameBoard src dest
-                                    , turn = next $ turn game
-                                    }
+                        return $ newGame game { board = makeMove gameBoard src dest
+                                              , turn = next $ turn game
+                                              , enPassant = Nothing
+                                              }
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False (isSameColor color)
           isSameColor color = (color ==) . fst
+
+          within' (-1) = (False, src)
+          within' n = case within' (n - 1) of
+                        (b, p) -> (b || p == dest, p `stepTo` dest)
+
+          -- is `src` within `n` of `dest`?
+          within :: Delta -> Bool
+          within = fst . within'
 
           gameBoard = board game
 
           -- Walk from src towards dest (maybe passing it), and keep going until you hit the rook.
           rookPos = last $ straightPath gameBoard src $ step src dest
-          castle = makeMove (makeMove gameBoard src dest) rookPos (dest `stepTo` src)
+          castle g = g { board = makeMove (board g) rookPos (dest `stepTo` src) }
+
+          makePassant g = g { enPassant = Just $ src `stepTo` dest }
+          enactPassant g = g { board = board g // [ ((fst dest, snd src), Nothing) ] }
 
 zipT :: (a -> c -> r1) -> (b -> d -> r2) -> (a, b) -> (c, d) -> (r1, r2)
 zipT f g (a, b) (c, d) = (f a c, g b d)
@@ -128,7 +144,7 @@ cshift x y = toEnum $ fromEnum x + y
 shift :: (Enum a) => (a, Int) -> (Int, Int) -> (a, Int)
 shift = zipT cshift (+)
 
-step :: Position -> Position -> Delta
+step :: Position -> Position -> (Delta, Delta)
 step = zipT step' step'
     where step' x y | x < y = 1
                     | x > y = -1
@@ -146,7 +162,7 @@ isUnoccupied gameBoard = isNothing . (gameBoard!)
 
 -- Return a straight path from `origin` to `dest`, terminating at the edge of
 -- the gameBoard, or when you hit another piece (includes that tile, doesn't include `origin`).
-straightPath :: Board -> Position -> Delta -> [Position]
+straightPath :: Board -> Position -> (Delta, Delta) -> [Position]
 straightPath gameBoard origin d = unfoldr stepFunc . Just $ shift origin d
     where stepFunc p = do pos <- p
                           guard $ isValidPosition pos
@@ -155,21 +171,22 @@ straightPath gameBoard origin d = unfoldr stepFunc . Just $ shift origin d
                          return $ shift p d
 
 hasEmptyPath :: Board -> Position -> Position -> Bool
-hasEmptyPath gameBoard src dest = (length $ take l $ straightPath gameBoard src $ step src dest) == l
+hasEmptyPath gameBoard src dest = l == 0 || length path == l && isUnoccupied gameBoard (last path)
     where l = on max abs dx dy
           (dx, dy) = delta src dest
+          path = take l $ straightPath gameBoard src $ step src dest
 
 ediff :: Enum a => a -> a -> Int
 ediff = (-) `on` fromEnum
 
-delta :: Position -> Position -> Delta
+delta :: Position -> Position -> (Delta, Delta)
 delta = flip $ zipT ediff (-)
 
 -- Just moves the piece, no checking.
 makeMove :: Board -> Position -> Position -> Board
 makeMove gameBoard src dest = gameBoard // [ (src, Nothing)
-                                   , (dest, gameBoard!src >>= newStatus)
-                                   ]
+                                           , (dest, gameBoard!src >>= newStatus)
+                                           ]
     where newStatus (color, Pawn False) = Just (color, Pawn True)
           newStatus (color, Rook False) = Just (color, Rook True)
           newStatus (color, King False) = Just (color, King True)
@@ -182,29 +199,33 @@ isValidPosition (f, r) | f < 'A' = False
                        | r > 8 = False
                        | otherwise = True
 
-pawnStep :: Game.Logic.Color -> Int
-pawnStep color = if color == White
-                 then 1
-                 else -1
-
-moveAttempts :: Board -> Position -> Piece -> [Position]
-moveAttempts gameBoard src (Pawn hasMoved) = do (condition, d) <- moves
-                                                let dest = src `shift` d
-                                                guard $ isValidPosition dest
-                                                guard $ condition dest
-                                                return dest
+moveAttempts :: UniqueGame -> Position -> Piece -> [Position]
+moveAttempts game src (Pawn hasMoved) = do (condition, d) <- moves
+                                           let dest = src `shift` d
+                                           guard $ isValidPosition dest
+                                           guard $ condition dest
+                                           return dest
 
     where color = fst . fromJust $ gameBoard!src
+          gameBoard = board game
+
           doubleMove = if hasMoved
                        then Nothing
                        else Just $ (isUnoccupied gameBoard, (0, pawnStep color * 2))
-          moves = (maybe [] (:[]) doubleMove)
-                  ++ [ (isUnoccupied gameBoard, ( 0, pawnStep color))
-                     , (isOccupied   gameBoard, ( 1, pawnStep color))
-                     , (isOccupied   gameBoard, (-1, pawnStep color))
-                     ]
 
-moveAttempts gameBoard src (Rook _) = concat $ map (straightPath gameBoard src) edges
+          canEnPassant p = fromMaybe False $ (p ==) <$> enPassant game
+
+          moves = (maybe [] (:[]) doubleMove)
+                ++ [ (             isUnoccupied gameBoard,               ( 0, pawnStep color))
+                   , (liftA2 (||) (isOccupied   gameBoard) canEnPassant, ( 1, pawnStep color))
+                   , (liftA2 (||) (isOccupied   gameBoard) canEnPassant, (-1, pawnStep color))
+                   ]
+
+          pawnStep clr = if clr == White
+                         then 1
+                         else -1
+
+moveAttempts game src (Rook _) = concat $ map (straightPath (board game) src) edges
     where edges = [ (0, 1)
                   , (0, -1)
                   , (-1, 0)
@@ -215,14 +236,15 @@ moveAttempts _ src Knight = filter isValidPosition $ map (shift src) deltas
     where ls = [(x, y) | x <- [1, -1], y <- [2, -2]]
           deltas = map swap ls ++ ls
 
-moveAttempts gameBoard src Bishop = concat $ map (straightPath gameBoard src) corners
+moveAttempts game src Bishop = concat $ map (straightPath (board game) src) corners
     where corners = [ (x, y) | x <- [1, -1], y <- [1, -1] ]
 
-moveAttempts gameBoard src Queen = moveAttempts gameBoard src (Rook False) ++ moveAttempts gameBoard src Bishop
+moveAttempts game src Queen = moveAttempts game src (Rook False) ++ moveAttempts game src Bishop
 
-moveAttempts gameBoard src@(_, r) (King moved) = castles ++ filter isValidPosition moves
+moveAttempts game src@(_, r) (King moved) = castles ++ filter isValidPosition moves
     where moves = map (shift src) deltas
           deltas = [ (x, y) | x <- [-1 .. 1], y <- [-1 .. 1] ]
+          gameBoard = board game
 
           castles = [ src `castleTo` p | p <- rookPos, canCastleTo p ]
 
