@@ -113,7 +113,7 @@ isValidPosition (f, r) | f < 'A' = False
 
 -- | Initial state of the game gameBoard.
 initBoard :: Board
-initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
+{-initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
                                                                 , frontRank White
                                                                 , otherRank
                                                                 , otherRank
@@ -126,44 +126,48 @@ initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
                                [Rook False, Knight, Bishop, Queen, King False, Bishop, Knight, Rook False]
           frontRank color = replicate 8 $ Just (color, Pawn False)
           otherRank = replicate 8 Nothing
+-}
+initBoard = (listArray (('A', 1), ('H', 8)) $ replicate 64 Nothing) // [ (('E', 1), Just (White, King False))
+                                                                       , (('H', 1), Just (White, Rook False))
+                                                                       , (('F', 8), Just (Black, Queen))
+                                                                       , (('A', 8), Just (Black, King True))
+                                                                       , (('A', 2), Just (White, Pawn False))
+                                                                       ]
 
 -- | Initial state of the game.
 initGame :: UniqueGame
 initGame = UniqueGame initBoard Nothing White
 
 -- True iff `color` is in check on `board`.
-isCheck :: Color -> UniqueGame -> Bool
-isCheck color game = case filter (isKing.snd) . assocs $ board game of
-                        [] -> True
-                        (kingPos, _):_ -> any (threatensKing kingPos) . indices $ board game
-    where threatensKing k pos = isJust $ move game pos k
-          isKing (Just (c, (King _))) = c == color
+isCheck :: Color -> Board -> Bool
+isCheck color gameBoard = case filter (isKing.snd) $ assocs gameBoard of
+                            [] -> True
+                            (kingPos, _):_ -> any (threatens kingPos) $ indices gameBoard
+    where isKing (Just (c, (King _))) = c == color
           isKing _ = False
+          threatens pos p = isJust $ gameBoard!p
+                                   >>= guard . (color /=) . fst
+                                   >> move' shallowGame p pos
+          shallowGame = UniqueGame { board = gameBoard
+                                   , enPassant = Nothing
+                                   , turn = next color
+                                   }
+                        
+-- Same as `move`, but doesn't check for check.
+move' :: UniqueGame -> Position -> Position -> Maybe UniqueGame
+move' game src dest = do (color, piece) <- gameBoard!src
+                         guard . not . isFriendlyFire color $ gameBoard!dest
+                         guard $ dest `elem` moveAttempts game src piece
 
--- | Attempt to move the piece from `src` to `dest` on `gameBoard`.
-move :: UniqueGame
-     -- ^ The gameBoard to move on
-     -> Position
-     -- ^ The position of the piece we're moving
-     -> Position
-     -- ^ Position to move to
-     -> Maybe UniqueGame
-     -- ^ Nothing if the move is invalid, Just the new gameBoard otherwise.
-move game src dest = do (color, piece) <- gameBoard!src
-                        guard . not . isFriendlyFire color $ gameBoard!dest
-                        guard $ dest `elem` moveAttempts game src piece
-
-                        let updateGame | piece == King False && (not $ within 1) = castle
-                                       | piece == Pawn False && (not $ within 1) = makePassant
-                                       | piece == Pawn True && isUnoccupied gameBoard dest = enactPassant
-                                       | otherwise = id
+                         let updateGame | piece == King False && (not $ within 1) = castle
+                                        | piece == Pawn False && (not $ within 1) = makePassant
+                                        | piece == Pawn True && isUnoccupied gameBoard dest = enactPassant
+                                        | otherwise = id
    
-                            newGame = updateGame game { board = makeMove gameBoard src dest
-                                                      , turn = next $ turn game
-                                                      , enPassant = Nothing
-                                                      }
-                        guard . not $ isCheck color newGame
-                        return newGame
+                         return $ updateGame game { board = makeMove gameBoard src dest
+                                                  , turn = next $ turn game
+                                                  , enPassant = Nothing
+                                                  }
 
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False (isSameColor color)
@@ -186,6 +190,19 @@ move game src dest = do (color, piece) <- gameBoard!src
           makePassant g = g { enPassant = Just $ src `stepTo` dest }
           enactPassant g = g { board = board g // [ ((fst dest, snd src), Nothing) ] }
 
+-- | Attempt to move the piece from `src` to `dest` on `gameBoard`.
+move :: UniqueGame
+     -- ^ The gameBoard to move on
+     -> Position
+     -- ^ The position of the piece we're moving
+     -> Position
+     -- ^ Position to move to
+     -> Maybe UniqueGame
+     -- ^ Nothing if the move is invalid, Just the new gameBoard otherwise.
+move game src dest = do newGame <- move' game src dest
+                        guard . not . isCheck (prev $ turn newGame) $ board newGame
+                        return newGame
+
 -- Return a straight path from `origin` to `dest`, terminating at the edge of
 -- the gameBoard, or when you hit another piece (includes that tile, doesn't include `origin`).
 straightPath :: Board -> Position -> (Delta, Delta) -> [Position]
@@ -195,12 +212,6 @@ straightPath gameBoard origin d = unfoldr stepFunc . Just $ shift origin d
                           return (pos, nextPos pos)
           nextPos p = do guard $ isUnoccupied gameBoard p
                          return $ shift p d
-
-hasEmptyPath :: Board -> Position -> Position -> Bool
-hasEmptyPath gameBoard src dest = l == 0 || length path == l && isUnoccupied gameBoard (last path)
-    where l = on max abs dx dy
-          (dx, dy) = delta src dest
-          path = take l $ straightPath gameBoard src $ step src dest
 
 -- Just moves the piece, no checking.
 makeMove :: Board -> Position -> Position -> Board
@@ -263,7 +274,7 @@ moveAttempts game src@(_, r) (King moved) = castles ++ filter isValidPosition mo
 
           color = fst . fromJust $ gameBoard!src
           canCastleTo p = not moved
-                        && hasEmptyPath gameBoard src (stepTo p src)
+                        && hasCastlePath (p `stepTo` src)
                         && maybe False isCastleReceiver (gameBoard!p)
           isCastleReceiver (c, p) = c == color && p == Rook False
           castleTo p1 p2 = stepTo (stepTo p1 p2) p2
@@ -271,4 +282,11 @@ moveAttempts game src@(_, r) (King moved) = castles ++ filter isValidPosition mo
           rookPos = [ ('A', r)
                     , ('H', r)
                     ]
+
+          hasCastlePath dest = length path == l
+                             && (l == 0 || isUnoccupied gameBoard (last path))
+                             && all (not . isCheck color . makeMove gameBoard src) path
+            where l = on max abs dx dy
+                  (dx, dy) = delta src dest
+                  path = take l $ straightPath gameBoard src $ step src dest
 
