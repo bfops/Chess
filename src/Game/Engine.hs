@@ -134,7 +134,7 @@ display :: GameState a -> Window -> IO ()
 display gs w = do (d, rend, ls) <- modifyMVar (loaders gs) $ \ls ->
                        do ls' <- runGraphics $ runLoadersDeferred ls
                           (d, r) <- atomically $ do rend <- readTVar $ toRender gs
-                                                    d    <- readTVar $ windowDims gs
+                                                    d   <- readTVar $ windowDims gs
                                                     return (d, rend)
                           return (ls', (d, r, ls'))
                   runGraphics $ updateWindow ls d rend
