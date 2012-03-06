@@ -44,7 +44,8 @@ Executable Chess
                        time ==1.4.*,
                        data-ivar ==0.30.*,
                        monad-par ==0.1.*,
-                       global-variables ==1.0.*
+                       global-variables ==1.0.*,
+                       tuple ==0.2.*
 
 test-suite ChessTests
     type: exitcode-stdio-1.0

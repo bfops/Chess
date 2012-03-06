@@ -3,7 +3,6 @@ module Main (main) where
 
 import Config
 import Control.DeepSeq
-import Control.Monad
 import Data.Array
 import qualified Data.HashMap.Strict as M
 import Data.HashString
@@ -85,16 +84,16 @@ fileString c p = toHashString $ "piece-" ++ (colorString c) ++ "-" ++ (pieceStri
     where colorString White = "w"
           colorString Black = "b"
 
-          pieceString (Pawn _) = "p"
-          pieceString (Rook _) = "r"
-          pieceString Knight   = "n"
-          pieceString Bishop   = "b"
-          pieceString Queen    = "q"
-          pieceString (King _) = "k"
+          pieceString Pawn   = "p"
+          pieceString Rook   = "r"
+          pieceString Knight = "n"
+          pieceString Bishop = "b"
+          pieceString Queen  = "q"
+          pieceString King   = "k"
 
 -- Prevents recomputation of our piece hashstrings.
 allPieces :: [HashString]
-allPieces = [ fileString c p | c <- [White, Black] , p <- [Pawn False, Rook False, Knight, Bishop, Queen, King False] ]
+allPieces = [ fileString c p | c <- [White, Black] , p <- [minBound .. maxBound ] ]
 
 chessBoard :: Board -> Renderer
 chessBoard gameBoard | rendDims w /= rendDims b = error "White and black square textures are not the same size."
@@ -117,7 +116,7 @@ chessBoard gameBoard | rendDims w /= rendDims b = error "White and black square 
                   evenx = even x
                   eveny = even y
                   renderTileContents = maybe [] renderPiece
-                  renderPiece (c, pce) = [(fromJust $ M.lookup (fileString c pce) pieceMap)
+                  renderPiece (c, pce, _) = [(fromJust $ M.lookup (fileString c pce) pieceMap)
                                             { pos = Right (HCenterAlign 0, VCenterAlign 0) }]
 
         withPosition :: Renderer -> Coord -> Renderer
@@ -160,7 +159,7 @@ solveNewRot r dt is = r + v*dt * fromIntegral
 
 considerMovement :: GameState -> InputState -> Maybe GameState
 considerMovement gs is = do tile <- clickCoords
-                            maybe (select tile) return $ mvSrc gs >>= (`moveTo` tile)
+                            return $ fromMaybe (select tile) (mvSrc gs >>= (`moveTo` tile))
 
     where clickCoords = if testKeys is [ LeftButton ]
                         then let (x, y) = mousePos is
@@ -170,8 +169,7 @@ considerMovement gs is = do tile <- clickCoords
                                  else Nothing
                         else Nothing
 
-          select tile = (board $ game gs)!tile >>= \(color, _) -> do guard $ turn (game gs) == color
-                                                                     return gs { mvSrc = Just tile }
+          select tile = gs { mvSrc = Just tile }
 
           moveTo src tile = do gameState <- move (game gs) src tile
                                return $ gs { mvSrc = Nothing
