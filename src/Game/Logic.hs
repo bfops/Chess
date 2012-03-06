@@ -231,17 +231,23 @@ symmetry ds = do d <- ds
                  [d, swap d]
 
 actionAttempts :: Piece -> Color -> [Action]
-actionAttempts Pawn color = [ Action Move (Disp ( 0, pawnStep)) Nothing          Nothing
-                            , Action Move (Disp ( 0, doubStep)) (Just canDouble) (Just makePassant)
-                            , Action Take (Disp ( 1, pawnStep)) Nothing          Nothing
-                            , Action Take (Disp (-1, pawnStep)) Nothing          Nothing
+actionAttempts Pawn color = [ Action Move (Disp ( 0, pawnStep)) Nothing           Nothing
+                            , Action Move (Disp ( 0, doubStep)) (Just canDouble)  (Just makePassant)
+                            , Action Move (Disp ( 1, pawnStep)) (Just canPassant) (Just enactPassant)
+                            , Action Move (Disp (-1, pawnStep)) (Just canPassant) (Just enactPassant)
+                            , Action Take (Disp ( 1, pawnStep)) Nothing           Nothing
+                            , Action Take (Disp (-1, pawnStep)) Nothing           Nothing
                             ]
     where doubStep = 2 * pawnStep
           canDouble game src dest = null (sel3.fromJust $ (board game)!src) && isEmpty (board game) (src `stepTo` dest)
-          makePassant game src dest = game { enPassant = Just (src `stepTo` dest) }
+
           pawnStep = if color == White
                      then 1
                      else -1
+
+          makePassant game src dest = game { enPassant = Just (src `stepTo` dest) }
+          canPassant game _ dest = maybe False (dest ==) $ enPassant game
+          enactPassant game (_, r) (f, _) = game { board = (board game) // [ ((f, r), Nothing) ] }
 
 actionAttempts Rook   _ = moveAndTake . map Path . symmetry $ map (0,) [-1, 1]
 actionAttempts Knight _ = moveAndTake . map Disp . symmetry $ [ (x, y) | x <- [-1, 1], y <- [-2, 2] ]
