@@ -171,7 +171,7 @@ isCheck color game = case filter (maybe False isKing . snd) . assocs $ board gam
                             (kingPos, _):_ -> any (threatens kingPos) . indices $ board game
     where threatens pos p = fromMaybe False $ do (c, piece, _) <- (board game)!p
                                                  guard $ color /= c
-                                                 return . not . null . filter (isThreat pos p) $ actionAttempts piece color
+                                                 return . any (isThreat pos p) $ actionAttempts piece color
                                         
           isKing (c, piece, _) = color == c && piece == King
           isThreat pos p = liftA2 (&&) ((Take ==).actionType) (elem pos . destinations game p)
