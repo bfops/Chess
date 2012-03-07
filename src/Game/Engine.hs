@@ -81,7 +81,7 @@ runGame title initState updateT = do runGraphics $ getArgsAndInitialize
                                                       motionCallback        $= Just (onMotion   (inputSt state) $ windowDims state)
                                                       passiveMotionCallback $= Just (onMotion   (inputSt state) $ windowDims state)
 
-                                     tid <- forkIO $ runUpdateLoop state updateT
+                                     tid <- forkOS $ runUpdateLoop state updateT
 
                                      mainLoop
                                      killThread tid
@@ -121,7 +121,10 @@ waitFor targetTime = do currentTime <- getPOSIXTime
                             LT -> do threadDelay $ floor ((targetTime - currentTime) * 1e6)
                                      getPOSIXTime
                             EQ -> return currentTime
-                            GT -> do debugM "Game.Engine.update"
+                            -- For some reason, the framerate messages take
+                            -- awhile to display. Let's do that in a different
+                            -- thread so we don't slow down the simulation.
+                            GT -> do _ <- forkIO . debugM "Game.Engine.update"
                                        $ "Missed the framerate deadline by " ++ show ((ceiling $ (currentTime - targetTime)*1e6) :: Integer) ++ " μs."
                                      getPOSIXTime
 
