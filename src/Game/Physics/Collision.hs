@@ -10,7 +10,7 @@ module Game.Physics.Collision ( Point
                               ) where
 
 import Data.List
-import Numeric.Container
+import Numeric.LinearAlgebra
 
 -- | "Axis-aligned bounding box."
 --
@@ -23,14 +23,14 @@ import Numeric.Container
 --
 --   The number of rows is the number of dimensions of the box. The number of
 --   columns is always 2. This is enforced by the smart constructor(s).
-newtype AABB = AABB (Matrix Float)
+newtype AABB = AABB (Matrix Double)
 
 -- | A point in the physics universe is just a list of the object's
 --   coordinates. The length of the vector is the number of dimensions its's
 --   defined for.
 --
 --   Use the smart constructor 'point2D' to build points.
-newtype Point = Point (Vector Float)
+newtype Point = Point (Vector Double)
 
 -- | "Oriented Bounding Box." A bounding box with any arbitrary orientation.
 --
@@ -50,15 +50,15 @@ data OBB = OBB2D {-# UNPACK #-} !Point
                  {-# UNPACK #-} !Point
                  {-# UNPACK #-} !Point
                  {-# UNPACK #-} !Point
-         | OBB !(Matrix Float) -- ^ The transformation matrix.
-               !(Vector Float) -- ^ The extent matrix.
+         | OBB !(Matrix Double) -- ^ The transformation matrix.
+               !(Vector Double) -- ^ The extent matrix.
 
 -- | Builds a 2D point out of a tuple.
 point2D :: Integral a => (a, a) -> Point
 point2D (x, y) = Point . fromList $ map fromIntegral [x, y]
 
 -- | Constructs a 2-dimensional axis-aligned bounding box.
-aabb2D :: (Float, Float) -> (Float, Float) -> AABB
+aabb2D :: (Double, Double) -> (Double, Double) -> AABB
 aabb2D (xa, xb) (ya, yb) = AABB $ (2 >< 2) [ min xa xb, max xa xb
                                            , min ya yb, max ya yb
                                            ]
@@ -89,7 +89,7 @@ instance Intersectable AABB AABB where
     --   edges.
     intersects (AABB ba) (AABB bb) = any testDim . zip (toRows ba) $ toRows bb
         where
-            testDim :: (Vector Float, Vector Float) -> Bool
+            testDim :: (Vector Double, Vector Double) -> Bool
             testDim (a, b) = let a'@(lx, hx) = (a @> 0, a @> 1)
                                  b'@(ly, hy) = (b @> 0, b @> 1)
                               in  between a' ly || between a' hy
@@ -99,7 +99,7 @@ instance Intersectable AABB AABB where
 instance Intersectable AABB Point where
     intersects (AABB bs) (Point p) = all inRange . zip (toRows bs) $ toList p
         where
-            inRange :: (Vector Float, Float) -> Bool
+            inRange :: (Vector Double, Double) -> Bool
             inRange (bnds, x) = between (bnds @> 0, bnds @> 1) x
     {-# INLINE intersects #-}
 
@@ -128,7 +128,7 @@ instance Intersectable OBB Point where
                                        | otherwise = intersects aabb transformed
         where
             transformed :: Point
-            transformed = Point $ lm <> p
+            transformed = Point $ inv lm <> p
             aabb :: AABB
             aabb = AABB . fromRows . map (\e -> fromList [-e, e]) $ toList exts
 
