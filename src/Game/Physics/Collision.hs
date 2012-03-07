@@ -113,10 +113,10 @@ obbBadInput = error "Invalid dimensions in the OOB intersection vectors being te
 instance Intersectable OBB Point where
     intersects (OBB2D (Point w) (Point x) (Point y) (Point z)) (Point p)
                    | any (/= 2) [ dp, dw, dx, dy, dz ] = obbBadInput
-                   | otherwise = all (>= 0) [ p `sub` w <.> x `sub` w
-                                           , p `sub` x <.> y `sub` x
-                                           , p `sub` y <.> z `sub` y
-                                           , p `sub` z <.> w `sub` z
+                   | otherwise = all (>= 0) [ (p - w) <.> (x - w)
+                                           , (p - x) <.> (y - x)
+                                           , (p - y) <.> (z - y)
+                                           , (p - z) <.> (w - z)
                                            ]
         where
             dp = dim p
