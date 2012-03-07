@@ -7,13 +7,15 @@ module Data.Cycle ( next
                   , prev
                   ) where
 
+-- | Increment a, possibly wrapping around.
 next :: (Enum a, Bounded a, Eq a) => a -> a
 next a = if a == maxBound
-                then minBound
-                else succ a
+         then minBound
+         else succ a
 
+-- | Decrement a, possibly wrapping around.
 prev :: (Enum a, Bounded a, Eq a) => a -> a
 prev a = if a == minBound
-                then maxBound
-                else pred a
+         then maxBound
+         else pred a
 

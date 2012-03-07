@@ -1,12 +1,12 @@
 {-# LANGUAGE TupleSections #-}
 module Game.Logic ( Color(..)
                   , Piece(..)
+                  , UniqueGame(..)
                   , File
                   , Rank
                   , Position
                   , Tile
                   , Board
-                  , UniqueGame(..)
                   , initGame
                   , move
                   , shift
@@ -40,9 +40,9 @@ data Piece = Pawn
 
 instance NFData Piece
 
--- | Horizontal index of a chessgameBoard.
+-- | Horizontal index of a chess board.
 type File = Char
--- | Vertical index of a chessgameBoard.
+-- | Vertical index of a chess board.
 type Rank = Int
 -- | Describe a chessgameBoard position.
 type Position = (File, Rank)
@@ -54,11 +54,11 @@ type Tile = Maybe (Color, Piece, [Position])
 type Board = Array Position Tile
 
 -- | Contains all the information to uniquely describe a chess game.
-data UniqueGame = UniqueGame { board      :: Board
+data UniqueGame = UniqueGame { board     :: Board
                              -- ^ The current state of the board.
-                             , enPassant  :: Maybe Position
+                             , enPassant :: Maybe Position
                              -- ^ The position eligable for taking under en passant.
-                             , turn       :: Color
+                             , turn      :: Color
                              -- ^ Whose turn is it?
                              }
 
@@ -77,7 +77,7 @@ type Condition = UniqueGame
                -> Bool
                -- ^ Whether or not the action may take place.
 
--- Non-deterministic position.
+-- | Non-deterministic position.
 data NPos = Disp (Delta, Delta)
           -- ^ Displacement relative to the current position.
           | Path (Delta, Delta)
@@ -106,7 +106,14 @@ zipT f g (a, b) (c, d) = (f a c, g b d)
 cshift :: (Enum a) => a -> Int -> a
 cshift x y = toEnum $ fromEnum x + y
 
-shift :: (Enum a, Enum b) => (a, b) -> (Int, Int) -> (a, b)
+-- | Shift a position by a displacement.
+shift :: (Enum a, Enum b)
+      => (a, b)
+      -- ^ Position to shift
+      -> (Delta, Delta)
+      -- ^ Amount to shift by
+      -> (a, b)
+      -- ^ Resultant position
 shift = zipT cshift cshift
 
 step :: Position -> Position -> (Delta, Delta)
