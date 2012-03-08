@@ -208,7 +208,7 @@ move game src dest = do (color, piece, _) <- gameBoard!src
                             
                         guard . not $ isCheck color newGame
 
-                        return $ foldl enactHandler newGame finalizers
+                        return $ foldl' enactHandler newGame finalizers
 
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False $ (color ==) . sel1
