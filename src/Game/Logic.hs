@@ -142,12 +142,12 @@ isValidPosition (f, r) | f < 'A' = False
 -- | Initial state of the game gameBoard.
 initBoard :: Board
 initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
-                                                                , frontRank White
-                                                                , otherRank
-                                                                , otherRank
-                                                                , otherRank
-                                                                , otherRank
                                                                 , frontRank Black
+                                                                , otherRank
+                                                                , otherRank
+                                                                , otherRank
+                                                                , otherRank
+                                                                , frontRank White
                                                                 , backRank Black
                                                                 ]
     where backRank color = map (Just . (color,,[])) $ [ Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook ]
@@ -191,7 +191,7 @@ move :: UniqueGame
      -> Position
      -- ^ Position to move to
      -> Maybe UniqueGame
-     -- ^ Nothing if the move is invalid, Just the new gameBoard otherwise.
+     -- ^ Nothing if the move is invalid, Just the new board otherwise.
 move game src dest = do (color, piece, _) <- gameBoard!src
                         guard $ color == turn game
                         guard . not . isFriendlyFire color $ gameBoard!dest
@@ -200,19 +200,24 @@ move game src dest = do (color, piece, _) <- gameBoard!src
                         guard . not $ null actions
                         let moveHandler = fromMaybe (const.const) . handler $ head actions
                             simpleUpdate = game { board = makeMove gameBoard src dest
-                                                , turn = next $ turn game
                                                 , enPassant = Nothing
+                                                , turn = next $ turn game
                                                 }
-                            newGame = moveHandler simpleUpdate src dest
 
+                            newGame = moveHandler simpleUpdate src dest
+                            
                         guard . not $ isCheck color newGame
 
-                        return newGame
+                        return $ foldl enactHandler newGame finalizers
 
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False $ (color ==) . sel1
 
           gameBoard = board game
+
+          enactHandler g (c, h) = if c g src dest
+                                  then h g src dest
+                                  else g
 
 -- Return a straight path from `origin` to `dest`, terminating at the edge of
 -- the gameBoard, or when you hit another piece (includes that tile, doesn't include `origin`).
@@ -275,4 +280,17 @@ actionAttempts King color = castleMoves ++ moveAndTake [ Disp (x, y) | x <- [-1 
             where isCheckThreat p = isCheck color $ game { board = makeMove (board game) src p
                                                          , turn = next $ turn game
                                                          }
+
+-- | A series of handlers to be run after any action is taken.
+finalizers :: [(Condition, Handler)]
+finalizers = [ (none, promotePawns) ]
+    where none = const . const . const $ True
+          promotePawns game _ _ = game { board = foldr promote (board game) (promoteSpaces $ board game) }
+          promote (pos, color, hist) = (// [ (pos, Just (color, Queen, hist)) ])
+          promoteSpaces gboard = do f <- ['A'..'H']
+                                    r <- [1, 8]
+                                    (color, history) <- maybeToList $ do (c, p, h) <- gboard!(f, r)
+                                                                         guard $ p == Pawn
+                                                                         return (c, h)
+                                    return ((f, r), color, history)
 
