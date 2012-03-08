@@ -97,6 +97,7 @@ module Graphics.Rendering.OpenGL.Monad.Wrappers ( module Graphics.Rendering.Open
                                                 , glEmergencyM
                                                 ) where
 
+import Data.Function.Pointless
 import qualified Data.Text as T
 import qualified Graphics.Rendering.OpenGL.GL as OGL
 import qualified Graphics.Rendering.OpenGL.GLU as OGLU
@@ -227,11 +228,6 @@ ortho2D a b c d = unsafeRunOnGraphicsCard $ OGLU.ortho2D (realToFrac a)
 createWindow :: T.Text -> GL GLUT.Window
 createWindow = unsafeRunOnGraphicsCard . GLUT.createWindow . T.unpack
 {-# INLINE createWindow #-}
-
-infixr 9 .:
-(.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
-(.:) f g x y = f $ g x y
-{-# INLINE (.:) #-}
 
 glDebugM :: String -> String -> GL ()
 glDebugM = unsafeRunOnGraphicsCard .: debugM

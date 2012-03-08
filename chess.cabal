@@ -46,7 +46,8 @@ Executable Chess
                        monad-par ==0.1.*,
                        global-variables ==1.0.*,
                        tuple ==0.2.*,
-                       hmatrix ==0.13.*
+                       hmatrix ==0.13.*,
+                       pointless-fun ==1.1.*
 
 test-suite ChessTests
     type: exitcode-stdio-1.0
