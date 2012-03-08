@@ -9,7 +9,6 @@ import qualified Data.HashMap.Strict as M
 import Data.HashString
 import Data.List
 import Data.Maybe
-import Debug.Trace
 import Game.Engine
 import Game.Input
 import Game.Logic
@@ -50,7 +49,8 @@ configLogger = do root <- getRootLogger
 data GameState = GameState { t0      :: !Double -- ^ the time value of the last frame.
                            , rectPos :: Coord
                            , rectRot :: Double -- ^ rotation of the rectangle, in radians.
-                           , game    :: UniqueGame
+                           , game    :: [UniqueGame] -- ^ The history of all progressions of the
+                                                    -- game state.
                            , mvSrc   :: Maybe Position --  ^ if the user's selected a piece to move,
                                                       --    they've selected the one here.
                            -- | When a key is first pressed, it is disabled
@@ -59,6 +59,11 @@ data GameState = GameState { t0      :: !Double -- ^ the time value of the last 
                            --   such as text in an in-game console.
                            , disabledKeys :: DisabledKeys
                            }
+
+-- | Return the current state of the game.
+-- Will error if, somehow, (game gs) is empty.
+curGame :: GameState -> UniqueGame
+curGame = head . game
 
 instance NFData GameState where
     rnf gs = rnf (rectPos gs) `seq`
@@ -138,7 +143,7 @@ chessBoard gs | rendDims w /= rendDims b = error "White and black square texture
         w = [texRend|"chess-square-w.png"|]
         b = [texRend|"chess-square-b.png"|]
 
-        gameBoard = board $ game gs
+        gameBoard = board $ curGame gs
 
         idx2pos :: Coord -> Coord
         idx2pos (x, y) = (dx*x, dy*y)
@@ -183,7 +188,7 @@ display gs (x, y) = (rectangleRenderer 600 600 red)
                                             , rotation = rectRot gs
                                             }
                           moveRender = maybeToList $ do mv <- mvSrc gs
-                                                        (c, pce, _) <- (board $ game gs)!mv
+                                                        (c, pce, _) <- (board $ curGame gs)!mv
                                                         return $ (fromJust $ M.lookup (fileString c pce) pieceMap)
                                                                      { pos = Left (x - 144, y - 44) }
 
@@ -212,7 +217,7 @@ considerMovement gs is = return . fromMaybe gs $ mouseTile >>= mover
                         return $ gs { mvSrc = Just t }
 
           place t = do src <- mvSrc gs
-                       return $ (maybe gs (\s -> gs { game = s }) $ move (game gs) src t)
+                       return $ (maybe gs (\s -> gs { game = s:(game gs) }) $ move (curGame gs) src t)
                                     { mvSrc = Nothing }
 
           mover t = if testKeys is [ LeftButton ]
@@ -222,9 +227,10 @@ considerMovement gs is = return . fromMaybe gs $ mouseTile >>= mover
 considerUndo :: InputState -> GameState -> GameState
 considerUndo is gs = updateDisabledKeys gs [(KeyChar 'u', runUndo)] is
     where
-        runUndo gs' = trace "undo!" gs'
+        runUndo gs' = gs' { game = popIfAble (game gs') }
+        popIfAble [] = []
+        popIfAble (_:xs) = xs
 
--- | We don't do anything... for now.
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Renderer)
 update gs !t is = let gs'  = considerUndo is $ fromMaybe gs (considerMovement gs is)
                       gs'' = gs' { t0 = t
@@ -245,7 +251,7 @@ update gs !t is = let gs'  = considerUndo is $ fromMaybe gs (considerMovement gs
                 g0 = t0 gs
 
 initState :: GameState
-initState = GameState 0 (400, 300) 0 initGame Nothing []
+initState = GameState 0 (400, 300) 0 [initGame] Nothing []
 
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.
