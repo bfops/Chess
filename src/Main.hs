@@ -8,6 +8,7 @@ import qualified Data.HashMap.Strict as M
 import Data.HashString
 import Data.List
 import Data.Maybe
+import Debug.Trace
 import Game.Engine
 import Game.Input
 import Game.Logic
@@ -45,12 +46,17 @@ configLogger = do root <- getRootLogger
                   -- Set up all our custom logger levels.
                   mapM_ addLogLevel Config.customLogLevels
 
-data GameState = GameState { t0      :: !Double -- the time value of the last frame.
+data GameState = GameState { t0      :: !Double -- ^ the time value of the last frame.
                            , rectPos :: Coord
-                           , rectRot :: Double -- rotation of the rectangle, in radians.
+                           , rectRot :: Double -- ^ rotation of the rectangle, in radians.
                            , game    :: UniqueGame
-                           , mvSrc   :: Maybe Position -- if the user's selected a piece to move,
-                                                      -- they've selected the one here.
+                           , mvSrc   :: Maybe Position --  ^ if the user's selected a piece to move,
+                                                      --    they've selected the one here.
+                           -- | When a key is first pressed, it is disabled
+                           --   until it is raised again. This is useful for
+                           --   keys which are only activated once when held,
+                           --   such as text in an in-game console.
+                           , disabledKeys :: DisabledKeys
                            }
 
 instance NFData GameState where
@@ -59,6 +65,32 @@ instance NFData GameState where
              rnf (game    gs) `seq`
              rnf (mvSrc   gs) `seq`
              ()
+
+type DisabledKeys = [Key]
+
+withDisabledKeys :: GameState -> (DisabledKeys -> DisabledKeys) -> GameState
+withDisabledKeys gs f = gs { disabledKeys = f $ disabledKeys gs }
+
+-- | Runs the list of callback if the given keys have been pressed, making sure
+--   to flag keys to prevent repeats.
+updateDisabledKeys :: GameState
+                   -> [(Key, GameState -> GameState)]
+                   -- ^ A list of (Key, updateFunction). The update function is
+                   --   called whenever the key has been clicked (not held).
+                   -> InputState
+                   -> GameState
+updateDisabledKeys gs us is = foldl' f gs us
+    where
+        f :: GameState -> (Key, GameState -> GameState) -> GameState
+        f gs' (k, u) = let (disabled, disabledKeys') = remove k $ disabledKeys gs'
+                        in case (testKeys is [ k ], disabled) of
+                            (False, False) -> gs'
+                            (True, True)   -> gs'
+                            (True, False)  -> u gs' `withDisabledKeys` (k:)
+                            (False, True)  -> gs' `withDisabledKeys` const disabledKeys'
+            where
+                -- | Removes an element from a list, returning whether or not anything was removed.
+                remove x = foldl' (\(!b, xs) y -> if x == y then (True, xs) else (b, y:xs)) (False, [])
 
 #define DEFPIECE(name) ([hashed|name|], [texRend|name|])
 
@@ -177,9 +209,14 @@ considerMovement gs is = do tile <- clickCoords
                                            , game = gameState 
                                            }
 
+considerUndo :: InputState -> GameState -> GameState
+considerUndo is gs = updateDisabledKeys gs [(KeyChar 'u', runUndo)] is
+    where
+        runUndo gs' = trace "undo!" gs'
+
 -- | We don't do anything... for now.
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Renderer)
-update gs !t is = let gs'  = fromMaybe gs (considerMovement gs is)
+update gs !t is = let gs'  = considerUndo is $ fromMaybe gs (considerMovement gs is)
                       gs'' = gs' { t0 = t
                                  --, rectPos = solveNewPos (rectPos gs) is
                                  , rectRot = solveNewRot (rectRot gs) dt is
@@ -198,7 +235,7 @@ update gs !t is = let gs'  = fromMaybe gs (considerMovement gs is)
                 g0 = t0 gs
 
 initState :: GameState
-initState = GameState 0 (400, 300) 0 initGame Nothing
+initState = GameState 0 (400, 300) 0 initGame Nothing []
 
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.
