@@ -125,7 +125,7 @@ waitFor targetTime = do currentTime <- getPOSIXTime
                             -- awhile to display. Let's do that in a different
                             -- thread so we don't slow down the simulation.
                             GT -> do _ <- forkIO . debugM "Game.Engine.update"
-                                       $ "Missed the framerate deadline by " ++ show ((ceiling $ (currentTime - targetTime)*1e6) :: Integer) ++ " μs."
+                                       $ "Missed the framerate deadline by " ++ show ((ceiling $ (currentTime - targetTime)*1e3) :: Integer) ++ " ms."
                                      getPOSIXTime
 
 -- | How long a frame is, in seconds.
