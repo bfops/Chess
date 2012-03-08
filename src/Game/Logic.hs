@@ -5,7 +5,6 @@ module Game.Logic ( Color(..)
                   , File
                   , Rank
                   , Position
-                  , Tile
                   , Board
                   , initGame
                   , move

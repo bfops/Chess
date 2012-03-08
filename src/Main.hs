@@ -3,6 +3,7 @@ module Main (main) where
 
 import Config
 import Control.DeepSeq
+import Control.Monad
 import Data.Array
 import qualified Data.HashMap.Strict as M
 import Data.HashString
@@ -96,29 +97,34 @@ fileString c p = toHashString $ "piece-" ++ (colorString c) ++ "-" ++ (pieceStri
 allPieces :: [HashString]
 allPieces = [ fileString c p | c <- [White, Black] , p <- [minBound .. maxBound ] ]
 
-chessBoard :: Board -> Renderer
-chessBoard gameBoard | rendDims w /= rendDims b = error "White and black square textures are not the same size."
-                     | otherwise               = let renderBoard = [ tileRender (x,y) | x <- [0..7], y <- [0..7] ]
-                                                  in defaultRenderer { children = renderBoard, rendDims = (dx*8, dy*8) }
+chessBoard :: GameState -> Renderer
+chessBoard gs | rendDims w /= rendDims b = error "White and black square textures are not the same size."
+              | otherwise               = let renderBoard = [ tileRender (x,y) | x <- [0..7], y <- [0..7] ]
+                                           in defaultRenderer { children = renderBoard, rendDims = (dx*8, dy*8) }
     where
         w, b :: Renderer
         w = [texRend|"chess-square-w.png"|]
         b = [texRend|"chess-square-b.png"|]
+
+        gameBoard = board $ game gs
 
         idx2pos :: Coord -> Coord
         idx2pos (x, y) = (dx*x, dy*y)
 
         tileRender :: Coord -> Renderer
         tileRender p@(x, y) = checkerRender `atIndex` p
-                                            `withChildren` (renderTileContents $ gameBoard!(shift ('A', 1) p))
+                                            `withChildren` (renderTileContents $ shift ('A', 1) p)
             where checkerRender |     evenx &&     eveny = b
                                 | not evenx && not eveny = b
                                 | otherwise              = w
                   evenx = even x
                   eveny = even y
-                  renderTileContents = maybe [] renderPiece
+                  renderTileContents brdPos = maybe [] renderPiece $ guard (not $ isMoving brdPos)
+                                                                   >> gameBoard!brdPos
                   renderPiece (c, pce, _) = [(fromJust $ M.lookup (fileString c pce) pieceMap)
                                             { pos = Right (HCenterAlign 0, VCenterAlign 0) }]
+
+                  isMoving brdPos = maybe False (== brdPos) $ mvSrc gs
 
         withPosition :: Renderer -> Coord -> Renderer
         withPosition r c = r { pos = Left c }
@@ -131,20 +137,24 @@ chessBoard gameBoard | rendDims w /= rendDims b = error "White and black square 
 
         (dx, dy) = rendDims w
 
-display :: GameState -> Renderer
-display gs = let rect = (rectangleRenderer 600 600 red)
-                                { pos = Right ( HCenterAlign 0
-                                              , VCenterAlign 0
-                                              )
-                                , children = [ boardRender ]
-                                }
-                 boardRender = (chessBoard . board $ game gs)
-                                { pos = Right ( HCenterAlign 0
-                                              , VCenterAlign 0
-                                              )
-                                , rotation = rectRot gs
-                                }
-              in rect
+display :: GameState -> Coord -> Renderer
+display gs (x, y) = (rectangleRenderer 600 600 red)
+                        { pos = Right ( HCenterAlign 0
+                                      , VCenterAlign 0
+                                      )
+                        , children = [ boardRender ] ++ moveRender
+                        }
+                    where boardRender = (chessBoard gs)
+                                           { pos = Right ( HCenterAlign 0
+                                                         , VCenterAlign 0
+                                                         )
+                                            , rotation = rectRot gs
+                                            }
+                          moveRender = maybeToList $ do mv <- mvSrc gs
+                                                        (c, pce, _) <- (board $ game gs)!mv
+                                                        return $ (fromJust $ M.lookup (fileString c pce) pieceMap)
+                                                                     { pos = Left (x - 144, y - 44) }
+
 
 {-
 solveNewPos :: Coord -> InputState -> Coord
@@ -159,23 +169,23 @@ solveNewRot r dt is = r + v*dt * fromIntegral
         v = 1 -- velocity
 
 considerMovement :: GameState -> InputState -> Maybe GameState
-considerMovement gs is = do tile <- clickCoords
-                            return $ fromMaybe (select tile) (mvSrc gs >>= (`moveTo` tile))
+considerMovement gs is = return . fromMaybe gs $ mouseTile >>= mover
 
-    where clickCoords = if testKeys is [ LeftButton ]
-                        then let (x, y) = mousePos is
-                             in if x >= 144 && x < 800 - 144
-                                && y >=  44 && y < 600 -  44
-                                 then Just $ shift ('A', 1) ((x - 144) `div` 64, (y - 44) `div` 64)
-                                 else Nothing
-                        else Nothing
+    where mouseTile = do let (x, y) = mousePos is
+                         guard $ x >= 144 && x < 800 - 144
+                         guard $ y >=  44 && y < 600 -  44
+                         return $ shift ('A', 1) ((x - 144) `div` 64, (y - 44) `div` 64)
 
-          select tile = gs { mvSrc = Just tile }
+          select t = do guard . isNothing $ mvSrc gs
+                        return $ gs { mvSrc = Just t }
 
-          moveTo src tile = do gameState <- move (game gs) src tile
-                               return $ gs { mvSrc = Nothing
-                                           , game = gameState 
-                                           }
+          place t = do src <- mvSrc gs
+                       return $ (maybe gs (\s -> gs { game = s }) $ move (game gs) src t)
+                                    { mvSrc = Nothing }
+
+          mover t = if testKeys is [ LeftButton ]
+                    then select t
+                    else place t
 
 -- | We don't do anything... for now.
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Renderer)
@@ -188,7 +198,7 @@ update gs !t is = let gs'  = fromMaybe gs (considerMovement gs is)
                                  , [ Loaded [hashed|"chess-square-w.png"|]
                                    , Loaded [hashed|"chess-square-b.png"|]
                                  ] ++ map Loaded allPieces
-                                 , display gs''
+                                 , display gs'' (mousePos is)
                                  )
     where
         dt | g0 > 0 = t - g0
