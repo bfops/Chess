@@ -142,12 +142,12 @@ isValidPosition (f, r) | f < 'A' = False
 -- | Initial state of the game gameBoard.
 initBoard :: Board
 initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
-                                                                , frontRank Black
-                                                                , otherRank
-                                                                , otherRank
-                                                                , otherRank
-                                                                , otherRank
                                                                 , frontRank White
+                                                                , otherRank
+                                                                , otherRank
+                                                                , otherRank
+                                                                , otherRank
+                                                                , frontRank Black
                                                                 , backRank Black
                                                                 ]
     where backRank color = map (Just . (color,,[])) $ [ Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook ]
