@@ -196,6 +196,7 @@ empty = InputState (KM 0) (0, 0)
 -- | Tests if a group of keys are pressed in the given input state.
 testKeys :: InputState -> [Key] -> Bool
 testKeys is = all (testBit (keys is) . keyToIndex)
+{-# INLINE testKeys #-}
 
 -- | A GLUT 'keyboardMouseCallback' that should be partially applied with a
 --   shared 'InputState' variable. This will keep the state updated with the
