@@ -229,6 +229,7 @@ considerUndo is gs = updateDisabledKeys gs [(KeyChar 'u', runUndo)] is
     where
         runUndo gs' = gs' { game = popIfAble (game gs') }
         popIfAble [] = []
+        popIfAble [x] = [x]
         popIfAble (_:xs) = xs
 
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Renderer)
