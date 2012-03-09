@@ -228,7 +228,7 @@ considerUndo :: InputState -> GameState -> GameState
 considerUndo is gs = updateDisabledKeys gs [(KeyChar 'u', runUndo)] is
     where
         runUndo gs' = gs' { game = popIfAble (game gs') }
-        popIfAble [] = []
+        popIfAble []  = error "No game states to pop. Someone dun goof'd."
         popIfAble [x] = [x]
         popIfAble (_:xs) = xs
 
