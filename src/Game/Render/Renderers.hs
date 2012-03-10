@@ -7,6 +7,8 @@ module Game.Render.Renderers ( rectangleRenderer
                              , textRenderer
                              ) where
 
+import qualified Config
+import qualified Paths_Chess as CP
 import Data.HashString
 import qualified Data.Text as T
 import Graphics.Rendering.OpenGL.Monad as GL
@@ -17,6 +19,7 @@ import Game.Resource.Texture
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
+import System.FilePath
 import System.IO.Unsafe ( unsafePerformIO ) -- Only used in TH, to load dimensions.
 
 import Util.Defs
@@ -49,7 +52,11 @@ getTexDims :: String -> IO Dimensions
 getTexDims s = do img <- getImage (T.pack s) 
                   case img of
                     Just x  -> return (imageWidth' x, imageHeight' x)
-                    Nothing -> error $ "Texture \"" ++ s ++ "\" not found!"
+                    Nothing -> do p <- getTexPath s
+                                  error $ "Texture \"" ++ s ++ "\" not found at " ++ p
+
+getTexPath :: String -> IO String
+getTexPath = CP.getDataFileName . (Config.texturePrefix </>)
 
 texRenderQuoter :: String -> Q Exp
 texRenderQuoter s = [| textureRenderer $(hString s') $(lift . unsafePerformIO $ getTexDims s') |]
