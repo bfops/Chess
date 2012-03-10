@@ -1,3 +1,5 @@
+-- | Keeps all game loaders in one record, for easy access from various parts
+--   of the game.
 module Game.Loaders ( Loaders(..)
                     , updateLoaders
                     , runLoadersDeferred
@@ -22,5 +24,8 @@ data Loaders = Loaders { textureL :: ResourceLoader DynamicImage Texture
 updateLoaders :: Loaders -> [ResourceRequest] -> IO Loaders
 updateLoaders l rs = Loaders <$> chooseResources (textureL l) rs
 
+-- | Calls 'runDeferred' on all loaders.
+--
+--   Adding a loader? Applicative its 'runDeferred' function on the end here.
 runLoadersDeferred :: Loaders -> GL Loaders
 runLoadersDeferred l = Loaders <$> runDeferred (textureL l)

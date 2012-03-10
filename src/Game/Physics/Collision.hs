@@ -50,8 +50,8 @@ data OBB = OBB2D {-# UNPACK #-} !Point
                  {-# UNPACK #-} !Point
                  {-# UNPACK #-} !Point
                  {-# UNPACK #-} !Point
-         | OBB !(Matrix Double) -- ^ The transformation matrix.
-               !(Vector Double) -- ^ The extent matrix.
+         | OBB !(Matrix Double) -- The transformation matrix.
+               !(Vector Double) -- The extent matrix.
 
 -- | Builds a 2D point out of a tuple.
 point2D :: Integral a => (a, a) -> Point

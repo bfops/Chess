@@ -1,4 +1,8 @@
 {-# LANGUAGE TupleSections #-}
+-- | A generic resource loader, containing methods to load and unload resuorces
+--   automatically given a list of resource that must be loaded "now", or
+--   "eventually". See the documentation for 'ResourceLoader' for more
+--   information.
 module Game.Resource.Loader ( LoadableResource(..)
                             , ResourceLoader
                             , ResourceRequest(..)

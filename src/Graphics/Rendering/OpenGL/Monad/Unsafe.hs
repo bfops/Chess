@@ -32,6 +32,8 @@ runGraphics :: GL a -> IO a
 runGraphics (GL x) = x
 {-# INLINE runGraphics #-}
 
+-- | Runs an STM action inside the GL monad. This is allowed, since technically
+--   no IO is being performed.
 liftSTM :: STM a -> GL a
 liftSTM = unsafeRunOnGraphicsCard . atomically
 {-# INLINE liftSTM #-}

@@ -45,6 +45,7 @@ instance NFData InputState where
 newtype KeyMask = KM Integer
     deriving (Enum, Eq, Integral, Num, Ord, Bits, Read, Real, Show, NFData)
 
+-- | An enum defining every key on the keyboard which may be pressed.
 data Key = KeyChar Char -- ^ A keyboard character.
          | KeyF1
          | KeyF2

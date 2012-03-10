@@ -1,3 +1,4 @@
+-- | Convenience module, reexporting all relevant render modules.
 module Game.Render ( module Game.Render.Core
                    , module Game.Render.Renderers
                    ) where

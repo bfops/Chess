@@ -1,4 +1,7 @@
 {-# LANGUAGE BangPatterns, DeriveFunctor, DeriveFoldable, DeriveTraversable, DeriveDataTypeable #-}
+-- | A scene graph is used to represent any N-dimensional scene. Since it is
+--   polymorphic over its contents, we can use it to represent a variety of
+--   things, from a physics world to a render tree.
 module Game.SceneGraph ( SceneGraph(..)
                        -- * Transformations
                        , translate
@@ -19,7 +22,7 @@ import Data.Traversable
 import Data.Typeable
 import Numeric.LinearAlgebra
 
--- | Represents a 2D scene graph, with objects at the leaves, and
+-- | Represents an N-dimensional scene graph, with objects at the leaves, and
 --   transformations applied in a hierarchical fashion.
 --
 --   This is an instance of Functor, Foldable, and Traversable, so feel free to

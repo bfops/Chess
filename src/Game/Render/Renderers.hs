@@ -1,4 +1,6 @@
 {-# LANGUAGE RankNTypes, TemplateHaskell #-}
+-- | Contains helper functions for ezpz definition of a variety of primitive
+--   renderers.
 module Game.Render.Renderers ( rectangleRenderer
                              --, textureRenderer -- NEIN! Use makeTextureRenderer.
                              , texRend
@@ -62,6 +64,9 @@ texRend = QuasiQuoter { quoteExp  = texRenderQuoter
                       , quoteDec  = undefined
                       }
 
+-- | Renders a string onto the screen (2D).
+--
+--   _This function is currently incomplete. Do not use it!_
 textRenderer :: String -- ^ The name of the font we will use for rendering.
              -> String -- ^ The string we're drawing.
              -> Renderer

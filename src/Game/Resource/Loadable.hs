@@ -1,4 +1,6 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
+-- | Contains the typeclass for 'LoadableResource', representing any resource
+--   which needs to find its way from disk into the game world.
 module Game.Resource.Loadable ( LoadableResource(..)
                               ) where
 

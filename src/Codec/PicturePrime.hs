@@ -34,6 +34,7 @@ instance NFData DynamicImage where
     rnf (ImageRGBA8 i)  = rnf i
     rnf (ImageYCbCr8 i) = rnf i
 
+-- | A more exception safe version of readImage. Upstream patch pending.
 readImage' :: FilePath -> IO (Either String DynamicImage)
 readImage' path = catch doit
                     (\e -> return . Left $ show (e :: IOException))

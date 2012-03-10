@@ -1,4 +1,6 @@
 {-# LANGUAGE TupleSections #-}
+-- | All game logic specific to the game of Chess goes here. This keeps all our
+--   chess specific code isolated.
 module Game.Logic ( Color(..)
                   , Piece(..)
                   , UniqueGame(..)
