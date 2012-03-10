@@ -4,12 +4,16 @@ module Game.SceneGraph ( SceneGraph(..)
                        , translate
                        , scaleGraph
                        , rotate2D
+                       , rotate3D
+                       , transformPoint
+                       , transformVector
                        -- * Graph Visitors
-                       , optimize
                        , sceneMap
                        ) where
 
+import Control.Applicative
 import Control.DeepSeq
+import Control.Monad.Par
 import Data.Foldable ( Foldable )
 import Data.Traversable
 import Data.Typeable
@@ -30,65 +34,87 @@ instance NFData a => NFData (SceneGraph a) where
     rnf (Branch xs)     = rnf xs
     rnf (Object x)      = rnf x
 
--- | Any affine transformation can be represented by an NxN matrix, where N
---   is the dimensionality of the scene.
+-- | Any affine transformation can be represented by an (N+1)x(N+1) matrix,
+--   where N is the dimensionality of the scene. We use the extra dimension to
+--   put everything into homogenous coordinates. It just simplifies things.
 type Transformation = Matrix Double
 
 -- | Represents a 2-dimensional, clockwise rotation by θ radians. This is
 --   probably easier to use than building a rotation matrix manually.
 rotate2D :: Double -- ^ θ.
          -> Transformation
-rotate2D !x = (2><2) [  c, s
-                     , -s, c ]
+rotate2D !θ = (3><3) [  c, s, 0
+                     , -s, c, 0
+                     , 0,  0, 1 ]
     where
-        c = cos x
-        s = sin x
+        c = cos θ
+        s = sin θ
 
--- TODO: 3D rotation.
+-- | Rotates by a given angle around an arbitrary 3-dimensional axis.
+rotate3D :: Double -- ^ The amount (in radians) to rotate by.
+         -> Vector Double -- ^ The 3-dimensional axis around which we are rotating.
+         -> Transformation
+-- https://en.wikipedia.org/wiki/Rotation_matrix#Rotation_matrix_from_axis_and_angle
+rotate3D !θ !axis = (4><4) [ c+x*xoc , x*yoc-zs, x*zoc+ys, 0
+                           , y*xoc+zs, c+y*yoc , y*zoc-xs, 0
+                           , z*xoc-ys, z*yoc+xs, c+z*zoc , 0
+                           ,     0   ,    0    ,    0    , 1
+                           ]
+    where
+        c = cos θ
+        oc = 1-c
+        s = sin θ
+        [x, y, z] = toList axis
+        xs = x*s
+        ys = y*s
+        zs = z*s
+        xoc = x*oc
+        yoc = y*oc
+        zoc = z*oc
+
+-- | Adds a number to the end of a vector. Tends to be useful when constructing
+--   homogenous coordinates.
+vappend :: Element a => a -> Vector a -> Vector a
+vappend x = join . flip (:) [ constant x 1 ]
+
+-- | Applies the given modelview matrix to the given vector, applying all the
+--   stacked transformations in one go.
+transformVector :: Matrix Double -> Vector Double -> Vector Double
+transformVector m v = subVector 0 (dim v) $ m <> vappend 1.0 v
+
+-- | Applied the given modelview matrix to the given point, applying all the
+--   stacked transformations in one go.
+transformPoint :: Matrix Double -> Vector Double -> Vector Double
+transformPoint m p = subVector 0 (dim p) $ m <> vappend 0.0 p
 
 -- | Performs an n-dimensional scaling of the scene graph. Bigger numbers mean
 --   bigger objects. 1.0 means no scaling.
-scaleGraph :: Vector Double -- ^ The vector of values to scale by.
+scaleGraph :: Vector Double -- ^ The N-dimensional vector of values to scale by.
            -> Transformation
-scaleGraph = diag
+scaleGraph = diag . vappend 1.0
 {-# INLINE scaleGraph #-}
 
 -- | Translates an n-dimensional scene graph by the given amount. Bigger values
 --   mean bigger objects. 1.0 means no scaling.
-translate :: Vector Double -- ^ The vector of values to translate by.
+translate :: Vector Double -- ^ The N-dimensional vector of values to translate by.
           -> Transformation
-translate v = fromColumns $ (init . toColumns . ident $ dim v) ++ [v]
+translate v = fromColumns $ (init . toColumns . ident $ dim v + 1) ++ [vappend 1.0 v]
 
 -- | Maps a function taking an object and its modelview matrix, returning a new
 --   scene graph of a possibly different type.
-sceneMap :: Int -- ^ The number of dimensions in the scene.
-         -> (a -> Matrix Double -> b) -> SceneGraph a -> SceneGraph b
-sceneMap n f = sMap (ident n)
-    where
-        sMap m (Object x)  = Object $ f x m
-        sMap m (Branch xs) = Branch $ map (sMap m) xs
-        sMap m (Transform t child) = Transform t $ sMap (m <> t) child
-{-# INLINE sceneMap #-}
-
--- | Optimizes the scene graph, combining as many nodes as possible.
---   You should probably pass your graph through this function as soon as its
---   fully built. This prevents duplicated computations from being carried out
---   by various engine submodules, and frees up some wasted memory and
---   indirection. All in all, it's a good thing. But it walks the full graph, so
---   you should probably only use this once per frame.
 --
---   The returned scene graph will contain no thunks.
-optimize :: NFData a => SceneGraph a -> SceneGraph a
-optimize = force . optimize'
+--   To transform a point by the given matrix, use 'transformPoint'. To
+--   transform a vector, use 'transformVector'.
+--
+--   Don't do the multiplication yourself. You'll probably get it wrong.
+sceneMap :: NFData b
+         => Int -- ^ The number of dimensions in the scene.
+         -> (a -> Matrix Double -> b) -> SceneGraph a -> SceneGraph b
+sceneMap n f = runPar . sMap (ident n)
     where
-        optimize' o@(Object _) = o
-        -- multiply chained transformations into one.
-        optimize' (Transform t g) = case g of
-                                    (Transform t' g') -> Transform (t <> t') $ optimize g'
-                                    _                 -> Transform t $ optimize g
-        -- merge all child branches up into their parent.
-        optimize' (Branch xs)  = Branch $ foldr f [] xs
-            where
-                f (Branch ys) xs' = map optimize ys ++ xs'
-                f y           xs' = (optimize y):xs'
-{-# INLINE optimize #-}
+        -- Give a stack of matricies to multiply and a scene graph, returns the
+        -- transformed (by f) scene graph.
+        sMap m (Object x)  = return . Object $ f x m
+        sMap m (Branch xs) = Branch <$> parMapM (sMap m) xs
+        sMap m (Transform t child) = Transform t <$> sMap (t <> m) child
+{-# INLINE sceneMap #-}
