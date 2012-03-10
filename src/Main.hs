@@ -16,6 +16,7 @@ import Game.Physics.Collision()
 import Game.Render
 import Game.Render.Colors
 import Game.Resource.Loader
+import Game.SceneGraph()
 import System.IO (stderr)
 import System.Log.Formatter
 import System.Log.Handler as H
