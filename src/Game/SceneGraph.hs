@@ -28,14 +28,14 @@ import Numeric.LinearAlgebra
 --   This is an instance of Functor, Foldable, and Traversable, so feel free to
 --   walk it like you would any recursive data structure.
 data SceneGraph a = Object a
-                  | Branch [SceneGraph a]
                   | Transform !Transformation !(SceneGraph a)
+                  | Branch [SceneGraph a]
     deriving (Show, Functor, Foldable, Traversable, Typeable)
 
 instance NFData a => NFData (SceneGraph a) where
     rnf (Transform t g) = t `seq` rnf g
-    rnf (Branch xs)     = rnf xs
     rnf (Object x)      = rnf x
+    rnf (Branch xs)     = rnf xs
 
 -- | Any affine transformation can be represented by an (N+1)x(N+1) matrix,
 --   where N is the dimensionality of the scene. We use the extra dimension to
@@ -118,6 +118,6 @@ sceneMap n f = runPar . sMap (ident n)
         -- Give a stack of matricies to multiply and a scene graph, returns the
         -- transformed (by f) scene graph.
         sMap m (Object x)  = return . Object $ f x m
-        sMap m (Branch xs) = Branch <$> parMapM (sMap m) xs
         sMap m (Transform t child) = Transform t <$> sMap (t <> m) child
+        sMap m (Branch xs) = Branch <$> parMapM (sMap m) xs
 {-# INLINE sceneMap #-}
