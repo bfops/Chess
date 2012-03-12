@@ -118,6 +118,6 @@ sceneMap n f = runPar . sMap (ident n)
         -- Give a stack of matricies to multiply and a scene graph, returns the
         -- transformed (by f) scene graph.
         sMap m (Object x)  = return . Object $ f x m
-        sMap m (Transform t child) = Transform t <$> sMap (m <> t) child
+        sMap m (Transform t child) = Transform t <$> sMap (t <> m) child
         sMap m (Branch xs) = Branch <$> parMapM (sMap m) xs
 {-# INLINE sceneMap #-}
