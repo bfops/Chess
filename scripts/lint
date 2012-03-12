@@ -3,4 +3,4 @@
 set -e
 
 # Make sure to run this from the project root!
-hlint src/ test/ -q --report --hint=Default --hint=Dollar || firefox report.html
+LANG=en_US.utf8 hlint src/ test/ --report --hint=Default --hint=Dollar || firefox file://`pwd`/report.html
