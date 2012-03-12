@@ -8,8 +8,12 @@ module Game.SceneGraph ( SceneGraph(..)
                        , scaleGraph
                        , rotate2D
                        , rotate3D
-                       , transformPoint
-                       , transformVector
+                       , rotate3DX
+                       , rotate3DY
+                       , rotate3DZ
+                       , rotateEuler
+                       , homPoint
+                       , homVector
                        -- * Graph Visitors
                        , sceneMap
                        ) where
@@ -75,6 +79,46 @@ rotate3D !θ !axis = (4><4) [ c+x*xoc , x*yoc-zs, x*zoc+ys, 0
         yoc = y*oc
         zoc = z*oc
 
+-- | Rotates θ radians clockwise around the X-axis.
+rotate3DX :: Double -- θ
+          -> Transformation
+rotate3DX !θ = (4><4) [ 1,  0, 0, 0
+                      , 0,  c, s, 0
+                      , 0, -s, c, 0
+                      , 0,  0, 0, 1 ]
+    where
+        c = cos θ
+        s = sin θ
+
+-- | Rotates θ radians clockwise around the Y axis.
+rotate3DY :: Double -- θ
+          -> Transformation
+rotate3DY !θ = (4><4) [  c, 0, -s, 0
+                      ,  0, 1,  0, 0
+                      , -s, 0,  c, 0
+                      ,  0, 0,  0, 1 ]
+    where
+        c = cos θ
+        s = sin θ
+
+-- | Rotates θ radians clockwise around the Y axis.
+rotate3DZ :: Double -- θ
+          -> Transformation
+rotate3DZ !θ = (4><4) [  c,  s, 0, 0
+                      , -s,  c, 0, 0
+                      ,  0,  0, 1, 0
+                      ,  0,  0, 0, 1 ]
+    where
+        c = cos θ
+        s = sin θ
+
+-- | Rotates around a yaw, pitch, and roll - all in one transformation.
+rotateEuler :: Double -- X-axis rotation.
+            -> Double -- Y-axis rotation.
+            -> Double -- Z-axis rotation.
+            -> Transformation
+rotateEuler x y z = rotate3DZ z * rotate3DY y * rotate3DX x
+
 -- | Adds a number to the end of a vector. Tends to be useful when constructing
 --   homogenous coordinates.
 vappend :: Element a => a -> Vector a -> Vector a
@@ -82,13 +126,13 @@ vappend x = join . flip (:) [ constant x 1 ]
 
 -- | Applies the given modelview matrix to the given vector, applying all the
 --   stacked transformations in one go.
-transformVector :: Matrix Double -> Vector Double -> Vector Double
-transformVector m v = subVector 0 (dim v) $ m <> vappend 1.0 v
+homVector :: Matrix Double -> Vector Double -> Vector Double
+homVector m v = subVector 0 (dim v) $ m <> vappend 1.0 v
 
 -- | Applied the given modelview matrix to the given point, applying all the
 --   stacked transformations in one go.
-transformPoint :: Matrix Double -> Vector Double -> Vector Double
-transformPoint m p = subVector 0 (dim p) $ m <> vappend 0.0 p
+homPoint :: Matrix Double -> Vector Double -> Vector Double
+homPoint m p = subVector 0 (dim p) $ m <> vappend 0.0 p
 
 -- | Performs an n-dimensional scaling of the scene graph. Bigger numbers mean
 --   bigger objects. 1.0 means no scaling.
@@ -106,8 +150,8 @@ translate v = fromColumns $ (init . toColumns . ident $ dim v + 1) ++ [vappend 1
 -- | Maps a function taking an object and its modelview matrix, returning a new
 --   scene graph of a possibly different type.
 --
---   To transform a point by the given matrix, use 'transformPoint'. To
---   transform a vector, use 'transformVector'.
+--   To transform a point by the given matrix, use 'homPoint'. To
+--   transform a vector, use 'homVector'.
 --
 --   Don't do the multiplication yourself. You'll probably get it wrong.
 sceneMap :: NFData b
@@ -118,6 +162,6 @@ sceneMap n f = runPar . sMap (ident n)
         -- Give a stack of matricies to multiply and a scene graph, returns the
         -- transformed (by f) scene graph.
         sMap m (Object x)  = return . Object $ f x m
-        sMap m (Transform t child) = Transform t <$> sMap (m <> t) child
+        sMap m (Transform t child) = Transform t <$> sMap (m * t) child
         sMap m (Branch xs) = Branch <$> parMapM (sMap m) xs
 {-# INLINE sceneMap #-}
