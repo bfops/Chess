@@ -6,4 +6,4 @@ cabal build
 cabal test
 cabal copy
 scripts/lint
-inst/bin/Chess &
+inst/bin/Chess +RTS -N4 -H16m &
