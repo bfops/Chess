@@ -1,4 +1,4 @@
-{-# LANGUAGE BangPatterns, MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 -- | Defines intersection tests for a varity of geometry.
 module Game.Physics.Collision ( Point
                               , point2D 

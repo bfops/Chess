@@ -125,7 +125,7 @@ step = zipT step' step'
 
 -- Take one step from x towards y.
 stepTo :: Position -> Position -> Position
-stepTo x = (shift x) . (step x)
+stepTo x = shift x . step x
 
 isOccupied :: Board -> Position -> Bool
 isOccupied gameBoard = isJust . (gameBoard!)
@@ -151,7 +151,7 @@ initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
                                                                 , frontRank Black
                                                                 , backRank Black
                                                                 ]
-    where backRank color = map (Just . (color,,[])) $ [ Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook ]
+    where backRank color = map (Just . (color,,[])) [ Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook ]
           frontRank color = replicate 8 $ Just (color, Pawn, [])
           otherRank = replicate 8 Nothing
 
@@ -169,7 +169,7 @@ destinations game src action = filter isValidTarget . evalPos $ npos action
           actionCond Move = isEmpty $ board game
           actionCond Take = isOccupied $ board game
 
-          isValidTarget p = (actionCond (actionType action) p)
+          isValidTarget p = actionCond (actionType action) p
                           && fromMaybe True ((\f -> f game src p) <$> cond action)
 
 -- True iff `color` is in check on `board`.
@@ -177,7 +177,7 @@ isCheck :: Color -> UniqueGame -> Bool
 isCheck color game = case filter (maybe False isKing . snd) . assocs $ board game of
                             [] -> error $ "No " ++ show color ++ " king!"
                             (kingPos, _):_ -> any (threatens kingPos) . indices $ board game
-    where threatens pos p = fromMaybe False $ do (c, piece, _) <- (board game)!p
+    where threatens pos p = fromMaybe False $ do (c, piece, _) <- board game ! p
                                                  guard $ color /= c
                                                  return . any (isThreat pos p) $ actionAttempts piece color
                                         
@@ -252,7 +252,7 @@ actionAttempts Pawn color = [ Action Move (Disp ( 0, pawnStep)) Nothing         
                             , Action Take (Disp (-1, pawnStep)) Nothing           Nothing
                             ]
     where doubStep = 2 * pawnStep
-          canDouble game src dest = null (sel3.fromJust $ (board game)!src) && isEmpty (board game) (src `stepTo` dest)
+          canDouble game src dest = null (sel3.fromJust $ board game ! src) && isEmpty (board game) (src `stepTo` dest)
 
           pawnStep = if color == White
                      then 1
@@ -260,7 +260,7 @@ actionAttempts Pawn color = [ Action Move (Disp ( 0, pawnStep)) Nothing         
 
           makePassant game src dest = game { enPassant = Just (src `stepTo` dest) }
           canPassant game _ dest = maybe False (dest ==) $ enPassant game
-          enactPassant game (_, r) (f, _) = game { board = (board game) // [ ((f, r), Nothing) ] }
+          enactPassant game (_, r) (f, _) = game { board = board game // [ ((f, r), Nothing) ] }
 
 actionAttempts Rook   _ = moveAndTake . map Path . symmetry $ map (0,) [-1, 1]
 actionAttempts Knight _ = moveAndTake . map Disp . symmetry $ [ (x, y) | x <- [-1, 1], y <- [-2, 2] ]
@@ -274,8 +274,8 @@ actionAttempts King color = castleMoves ++ moveAndTake [ Disp (x, y) | x <- [-1 
           castle d game src dest = game { board = makeMove (board game) (shift src d) (dest `stepTo` src) }
 
           canCastle d@(x, y) game src dest = isValidPosition (shift src d)
-                                           && fromMaybe False (null . sel3 <$> (board game)!src)
-                                           && fromMaybe False (null . sel3 <$> (board game)!(shift src d))
+                                           && fromMaybe False (null . sel3 <$> board game ! src)
+                                           && fromMaybe False (null . sel3 <$> board game ! shift src d)
                                            && all (isEmpty $ board game) (init $ straightPath (board game) src (signum x, y))
                                            && not (any isCheckThreat [src, src `stepTo` dest, dest])
             where isCheckThreat p = isCheck color $ game { board = makeMove (board game) src p

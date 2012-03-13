@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 -- | In this module, we provide a basic framework for running a game.
 module Game.Engine ( runGame
                    , Loaders ( textureL )
