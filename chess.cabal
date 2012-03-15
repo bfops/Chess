@@ -31,7 +31,7 @@ Executable Chess
                        OpenGLRaw ==1.2.*,
                        OpenGL ==2.5.*,
                        GLUT ==2.*,
-                       JuicyPixels ==1.1,
+                       JuicyPixels ==1.2,
                        hslogger ==1.*,
                        array < 1,
                        vector ==0.9.*,

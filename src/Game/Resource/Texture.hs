@@ -18,7 +18,6 @@ module Game.Resource.Texture ( Texture( texWidth, texHeight )
                              ) where
 
 import           Codec.Picture                   as Pic
-import           Codec.PicturePrime              as PicPrime
 import           Codec.Picture.Types             as PicTypes
 import qualified Config
 import           Control.Applicative
@@ -133,7 +132,7 @@ noJPEG       img         = img
 --   > do tex <- getImage "yellow-dot.png"
 getImage :: T.Text -> IO (Maybe DynamicImage)
 getImage name = do name' <- CP.getDataFileName $ Config.texturePrefix </> T.unpack name
-                   wrappedTex <- readImage' name'
+                   wrappedTex <- readImage name'
 
                    case wrappedTex of
                        Left err  -> do infoM "UI.TextureCache" $
