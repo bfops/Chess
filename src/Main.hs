@@ -13,6 +13,7 @@ import Game.Engine
 import Game.Input
 import Game.Logic
 import Game.Physics.Collision()
+import Game.Physics.Integration()
 import Game.Render
 import Game.Render.Colors
 import Game.Resource.Loader
