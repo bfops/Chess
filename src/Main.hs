@@ -11,7 +11,7 @@ import Data.List
 import Data.Maybe
 import Game.Engine
 import Game.Input
-import Game.Logic
+import qualified Game.Logic as G
 import Game.Physics.Collision()
 import Game.Physics.Integration()
 import Game.Render
@@ -51,10 +51,10 @@ configLogger = do root <- getRootLogger
 data GameState = GameState { t0      :: !Double -- ^ the time value of the last frame.
                            , rectPos :: Coord
                            , rectRot :: Double -- ^ rotation of the rectangle, in radians.
-                           , game    :: [UniqueGame] -- ^ The history of all progressions of the
-                                                    -- game state.
-                           , mvSrc   :: Maybe Position --  ^ if the user's selected a piece to move,
-                                                      --    they've selected the one here.
+                           , game    :: [G.GameState] -- ^ The history of all progressions of the
+                                                      -- game state.
+                           , mvSrc   :: Maybe G.Position --  ^ if the user's selected a piece to move,
+                                                         --    they've selected the one here.
                            -- | When a key is first pressed, it is disabled
                            --   until it is raised again. This is useful for
                            --   keys which are only activated once when held,
@@ -64,7 +64,7 @@ data GameState = GameState { t0      :: !Double -- ^ the time value of the last 
 
 -- | Return the current state of the game.
 -- Will error if, somehow, (game gs) is empty.
-curGame :: GameState -> UniqueGame
+curGame :: GameState -> G.GameState
 curGame = head . game
 
 instance NFData GameState where
@@ -120,21 +120,21 @@ pieceMap = M.fromList [ DEFPIECE("piece-b-b.png")
 #undef DEFPIECE
 
 -- Get the filename of the texture to load for this piece.
-fileString :: Game.Logic.Color -> Piece -> HashString
+fileString :: G.Color -> G.Piece -> HashString
 fileString c p = toHashString $ "piece-" ++ (colorString c) ++ "-" ++ (pieceString p) ++ ".png"
-    where colorString White = "w"
-          colorString Black = "b"
+    where colorString G.White = "w"
+          colorString G.Black = "b"
 
-          pieceString Pawn   = "p"
-          pieceString Rook   = "r"
-          pieceString Knight = "n"
-          pieceString Bishop = "b"
-          pieceString Queen  = "q"
-          pieceString King   = "k"
+          pieceString G.Pawn   = "p"
+          pieceString G.Rook   = "r"
+          pieceString G.Knight = "n"
+          pieceString G.Bishop = "b"
+          pieceString G.Queen  = "q"
+          pieceString G.King   = "k"
 
 -- Prevents recomputation of our piece hashstrings.
 allPieces :: [HashString]
-allPieces = [ fileString c p | c <- [White, Black] , p <- [minBound .. maxBound ] ]
+allPieces = [ fileString c p | c <- [G.White, G.Black] , p <- [minBound .. maxBound ] ]
 
 chessBoard :: GameState -> Renderer
 chessBoard gs | rendDims w /= rendDims b = error "White and black square textures are not the same size."
@@ -145,14 +145,14 @@ chessBoard gs | rendDims w /= rendDims b = error "White and black square texture
         w = [texRend|"chess-square-w.png"|]
         b = [texRend|"chess-square-b.png"|]
 
-        gameBoard = board $ curGame gs
+        gameBoard = G.board $ curGame gs
 
         idx2pos :: Coord -> Coord
         idx2pos (x, y) = (dx*x, dy*y)
 
         tileRender :: Coord -> Renderer
         tileRender p@(x, y) = checkerRender `atIndex` p
-                                            `withChildren` (renderTileContents $ shift ('A', 1) p)
+                                            `withChildren` (renderTileContents $ G.shift ('A', 1) p)
             where checkerRender |     evenx &&     eveny = b
                                 | not evenx && not eveny = b
                                 | otherwise              = w
@@ -190,7 +190,7 @@ display gs (x, y) = (rectangleRenderer 600 600 red)
                                             , rotation = rectRot gs
                                             }
                           moveRender = maybeToList $ do mv <- mvSrc gs
-                                                        (c, pce, _) <- (board $ curGame gs)!mv
+                                                        (c, pce, _) <- (G.board $ curGame gs)!mv
                                                         return $ (fromJust $ M.lookup (fileString c pce) pieceMap)
                                                                      { pos = Left (x - 144, y - 44) }
 
@@ -213,13 +213,13 @@ considerMovement gs is = return . fromMaybe gs $ mouseTile >>= mover
     where mouseTile = do let (x, y) = mousePos is
                          guard $ x >= 144 && x < 800 - 144
                          guard $ y >=  44 && y < 600 -  44
-                         return $ shift ('A', 1) ((x - 144) `div` 64, (y - 44) `div` 64)
+                         return $ G.shift ('A', 1) ((x - 144) `div` 64, (y - 44) `div` 64)
 
           select t = do guard . isNothing $ mvSrc gs
                         return $ gs { mvSrc = Just t }
 
           place t = do src <- mvSrc gs
-                       return $ (maybe gs (\s -> gs { game = s:(game gs) }) $ move (curGame gs) src t)
+                       return $ (maybe gs (\s -> gs { game = s:(game gs) }) $ G.move (curGame gs) src t)
                                     { mvSrc = Nothing }
 
           mover t = if testKeys is [ LeftButton ]
@@ -254,7 +254,7 @@ update gs !t is = let gs'  = considerUndo is $ fromMaybe gs (considerMovement gs
                 g0 = t0 gs
 
 initState :: GameState
-initState = GameState 0 (400, 300) 0 [initGame] Nothing []
+initState = GameState 0 (400, 300) 0 [G.initGame] Nothing []
 
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.

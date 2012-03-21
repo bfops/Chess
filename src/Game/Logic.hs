@@ -3,7 +3,7 @@
 --   chess specific code isolated.
 module Game.Logic ( Color(..)
                   , Piece(..)
-                  , UniqueGame(..)
+                  , GameState(..)
                   , File
                   , Rank
                   , Position
@@ -55,7 +55,7 @@ type Tile = Maybe (Color, Piece, [Position])
 type Board = Array Position Tile
 
 -- | Contains all the information to uniquely describe a chess game.
-data UniqueGame = UniqueGame { board     :: Board
+data GameState = GameState { board     :: Board
                              -- ^ The current state of the board.
                              , enPassant :: Maybe Position
                              -- ^ The position eligable for taking under en passant.
@@ -69,7 +69,7 @@ instance NFData UniqueGame where
                              rnf c `seq`
                              ()
 
-type Condition = UniqueGame
+type Condition = GameState
                -- ^ The game being played.
                -> Position
                -- ^ Position of the piece taking action.
@@ -84,21 +84,21 @@ data NPos = Disp (Delta, Delta)
           | Path (Delta, Delta)
           -- ^ A path in the direction given.
 
-type Handler = UniqueGame
+type Handler = GameState
              -- ^ The game being played.
              -> Position
              -- ^ The position of the piece taking action.
              -> Position
              -- ^ The position onto which the piece is taking action.
-             -> UniqueGame
+             -> GameState
              -- ^ The state of the game after the action is taken.
 
 data ActionType = Move | Take deriving Eq
 
 data Action = Action { actionType :: ActionType
                      , npos       :: NPos
-                     , cond       :: Maybe Condition
-                     , handler    :: Maybe Handler
+                     , conds      :: [Condition]
+                     , handlers   :: [Handler]
                      }
 
 zipT :: (a -> c -> r1) -> (b -> d -> r2) -> (a, b) -> (c, d) -> (r1, r2)
@@ -156,10 +156,10 @@ initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
           otherRank = replicate 8 Nothing
 
 -- | Initial state of the game.
-initGame :: UniqueGame
-initGame = UniqueGame initBoard Nothing White
+initGame :: GameState
+initGame = GameState initBoard Nothing White
 
-destinations :: UniqueGame -> Position -> Action -> [Position]
+destinations :: GameState -> Position -> Action -> [Position]
 destinations game src action = filter isValidTarget . evalPos $ npos action
     where evalPos (Disp d) = do let p = shift src d
                                 guard $ isValidPosition p
@@ -170,10 +170,10 @@ destinations game src action = filter isValidTarget . evalPos $ npos action
           actionCond Take = isOccupied $ board game
 
           isValidTarget p = actionCond (actionType action) p
-                          && fromMaybe True ((\f -> f game src p) <$> cond action)
+                          && all (\f -> f game src p) (conds action)
 
 -- True iff `color` is in check on `board`.
-isCheck :: Color -> UniqueGame -> Bool
+isCheck :: Color -> GameState -> Bool
 isCheck color game = case filter (maybe False isKing . snd) . assocs $ board game of
                             [] -> error $ "No " ++ show color ++ " king!"
                             (kingPos, _):_ -> any (threatens kingPos) . indices $ board game
@@ -185,27 +185,27 @@ isCheck color game = case filter (maybe False isKing . snd) . assocs $ board gam
           isThreat pos p = liftA2 (&&) ((Take ==).actionType) (elem pos . destinations game p)
                         
 -- | Attempt to move the piece from `src` to `dest` on `gameBoard`.
-move :: UniqueGame
+move :: GameState
      -- ^ The gameBoard to move on
      -> Position
      -- ^ The position of the piece we're moving
      -> Position
      -- ^ Position to move to
-     -> Maybe UniqueGame
-     -- ^ Nothing if the move is invalid, Just the new board otherwise.
+     -> Maybe GameState
+     -- ^ Nothing if the move is invalid, Just the new state otherwise.
 move game src dest = do (color, piece, _) <- gameBoard!src
                         guard $ color == turn game
                         guard . not . isFriendlyFire color $ gameBoard!dest
 
                         let actions = filter (elem dest . destinations game src) $ actionAttempts piece color
                         guard . not $ null actions
-                        let moveHandler = fromMaybe (const.const) . handler $ head actions
+                        let
                             simpleUpdate = game { board = makeMove gameBoard src dest
                                                 , enPassant = Nothing
                                                 , turn = next $ turn game
                                                 }
 
-                            newGame = moveHandler simpleUpdate src dest
+                            newGame = foldl' (\g f -> f g src dest) simpleUpdate (handlers $ head actions)
                             
                         guard . not $ isCheck color newGame
 
@@ -237,19 +237,19 @@ makeMove gameBoard src dest = gameBoard // [ (src, Nothing)
                                            ]
 
 moveAndTake :: [NPos] -> [Action]
-moveAndTake loci = [ Action t l Nothing Nothing | t <- [Move, Take], l <- loci ]
+moveAndTake loci = [ Action t l [] [] | t <- [Move, Take], l <- loci ]
 
 symmetry :: [(Delta, Delta)] -> [(Delta, Delta)]
 symmetry ds = do d <- ds
                  [d, swap d]
 
 actionAttempts :: Piece -> Color -> [Action]
-actionAttempts Pawn color = [ Action Move (Disp ( 0, pawnStep)) Nothing           Nothing
-                            , Action Move (Disp ( 0, doubStep)) (Just canDouble)  (Just makePassant)
-                            , Action Move (Disp ( 1, pawnStep)) (Just canPassant) (Just enactPassant)
-                            , Action Move (Disp (-1, pawnStep)) (Just canPassant) (Just enactPassant)
-                            , Action Take (Disp ( 1, pawnStep)) Nothing           Nothing
-                            , Action Take (Disp (-1, pawnStep)) Nothing           Nothing
+actionAttempts Pawn color = [ Action Move (Disp ( 0, pawnStep)) []           []
+                            , Action Move (Disp ( 0, doubStep)) [canDouble]  [makePassant]
+                            , Action Move (Disp ( 1, pawnStep)) [canPassant] [enactPassant]
+                            , Action Move (Disp (-1, pawnStep)) [canPassant] [enactPassant]
+                            , Action Take (Disp ( 1, pawnStep)) []           []
+                            , Action Take (Disp (-1, pawnStep)) []           []
                             ]
     where doubStep = 2 * pawnStep
           canDouble game src dest = null (sel3.fromJust $ board game ! src) && isEmpty (board game) (src `stepTo` dest)
@@ -269,7 +269,7 @@ actionAttempts Queen  c = actionAttempts Rook c ++ actionAttempts Bishop c
 
 actionAttempts King color = castleMoves ++ moveAndTake [ Disp (x, y) | x <- [-1 .. 1], y <- [-1 .. 1] ]
     where castleMoves = [ castleMove d | d <- [ (3, 0), (-4, 0) ] ]
-          castleMove d@(x, y) = Action Move (Disp (2 * signum x, y)) (Just $ canCastle d) (Just $ castle d)
+          castleMove d@(x, y) = Action Move (Disp (2 * signum x, y)) [canCastle d] [castle d]
 
           castle d game src dest = game { board = makeMove (board game) (shift src d) (dest `stepTo` src) }
 
