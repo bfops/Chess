@@ -10,6 +10,7 @@ module Game.Logic ( Color(..)
                   , Board
                   , initGame
                   , move
+                  , promote
                   , shift
                   ) where
 
@@ -61,13 +62,16 @@ data GameState = GameState { board     :: Board
                              -- ^ The position eligable for taking under en passant.
                              , turn      :: Color
                              -- ^ Whose turn is it?
+                             , promotion :: Maybe Position
+                             -- ^ Does a piece need to be promoted?
                              }
 
-instance NFData UniqueGame where
-    rnf (UniqueGame a b c) = rnf a `seq`
-                             rnf b `seq`
-                             rnf c `seq`
-                             ()
+instance NFData GameState where
+    rnf (GameState a b c d) = rnf a `seq`
+                              rnf b `seq`
+                              rnf c `seq`
+                              rnf d `seq`
+                              ()
 
 type Condition = GameState
                -- ^ The game being played.
@@ -157,7 +161,7 @@ initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
 
 -- | Initial state of the game.
 initGame :: GameState
-initGame = GameState initBoard Nothing White
+initGame = GameState initBoard Nothing White Nothing
 
 destinations :: GameState -> Position -> Action -> [Position]
 destinations game src action = filter isValidTarget . evalPos $ npos action
@@ -166,10 +170,10 @@ destinations game src action = filter isValidTarget . evalPos $ npos action
                                 return p
           evalPos (Path d) = straightPath (board game) src d
 
-          actionCond Move = isEmpty $ board game
-          actionCond Take = isOccupied $ board game
+          actionCond Move = isEmpty
+          actionCond Take = isOccupied
 
-          isValidTarget p = actionCond (actionType action) p
+          isValidTarget p = actionCond (actionType action) (board game) p
                           && all (\f -> f game src p) (conds action)
 
 -- True iff `color` is in check on `board`.
@@ -179,11 +183,11 @@ isCheck color game = case filter (maybe False isKing . snd) . assocs $ board gam
                             (kingPos, _):_ -> any (threatens kingPos) . indices $ board game
     where threatens pos p = fromMaybe False $ do (c, piece, _) <- board game ! p
                                                  guard $ color /= c
-                                                 return . any (isThreat pos p) $ actionAttempts piece color
+                                                 return . any (isThreat pos p) $ actionAttempts piece (turn game)
                                         
           isKing (c, piece, _) = color == c && piece == King
           isThreat pos p = liftA2 (&&) ((Take ==).actionType) (elem pos . destinations game p)
-                        
+
 -- | Attempt to move the piece from `src` to `dest` on `gameBoard`.
 move :: GameState
      -- ^ The gameBoard to move on
@@ -194,6 +198,7 @@ move :: GameState
      -> Maybe GameState
      -- ^ Nothing if the move is invalid, Just the new state otherwise.
 move game src dest = do (color, piece, _) <- gameBoard!src
+                        guard . isNothing $ promotion game
                         guard $ color == turn game
                         guard . not . isFriendlyFire color $ gameBoard!dest
 
@@ -208,17 +213,23 @@ move game src dest = do (color, piece, _) <- gameBoard!src
                             newGame = foldl' (\g f -> f g src dest) simpleUpdate (handlers $ head actions)
                             
                         guard . not $ isCheck color newGame
-
-                        return $ foldl' enactHandler newGame finalizers
+                        return newGame
 
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False $ (color ==) . sel1
 
           gameBoard = board game
 
-          enactHandler g (c, h) = if c g src dest
-                                  then h g src dest
-                                  else g
+promote :: GameState       -- ^ The state of the game
+        -> Piece           -- ^ The type of piece to promote to.
+        -> Maybe GameState -- ^ Nothing if the promotion is invalid, Just the new state otherwise.
+promote g piece = do pos <- promotion g
+                     (c, _, h) <- (board g)!pos
+                     guard canPromote
+                     return $ g { board = (board g) // [(pos, Just (c, piece, h))]
+                                , promotion = Nothing
+                                }
+    where canPromote = piece `elem` [Knight, Rook, Bishop, Queen]
 
 -- Return a straight path from `origin` to `dest`, terminating at the edge of
 -- the gameBoard, or when you hit another piece (includes that tile, doesn't include `origin`).
@@ -244,7 +255,8 @@ symmetry ds = do d <- ds
                  [d, swap d]
 
 actionAttempts :: Piece -> Color -> [Action]
-actionAttempts Pawn color = [ Action Move (Disp ( 0, pawnStep)) []           []
+actionAttempts Pawn color = map addPromoteCheck
+                            [ Action Move (Disp ( 0, pawnStep)) []           []
                             , Action Move (Disp ( 0, doubStep)) [canDouble]  [makePassant]
                             , Action Move (Disp ( 1, pawnStep)) [canPassant] [enactPassant]
                             , Action Move (Disp (-1, pawnStep)) [canPassant] [enactPassant]
@@ -254,9 +266,13 @@ actionAttempts Pawn color = [ Action Move (Disp ( 0, pawnStep)) []           []
     where doubStep = 2 * pawnStep
           canDouble game src dest = null (sel3.fromJust $ board game ! src) && isEmpty (board game) (src `stepTo` dest)
 
-          pawnStep = if color == White
-                     then 1
-                     else -1
+          (pawnStep, endRank) = if color == White
+                                then (1, 8)
+                                else (-1, 1)
+
+          fixPromote g _ d@(_, r) = g { promotion = (guard $ r == endRank) >> Just d }
+
+          addPromoteCheck (Action a b c d) = Action a b c (fixPromote:d)
 
           makePassant game src dest = game { enPassant = Just (src `stepTo` dest) }
           canPassant game _ dest = maybe False (dest ==) $ enPassant game
@@ -281,17 +297,3 @@ actionAttempts King color = castleMoves ++ moveAndTake [ Disp (x, y) | x <- [-1 
             where isCheckThreat p = isCheck color $ game { board = makeMove (board game) src p
                                                          , turn = next $ turn game
                                                          }
-
--- | A series of handlers to be run after any action is taken.
-finalizers :: [(Condition, Handler)]
-finalizers = [ (none, promotePawns) ]
-    where none = const . const . const $ True
-          promotePawns game _ _ = game { board = foldr promote (board game) (promoteSpaces $ board game) }
-          promote (pos, color, hist) = (// [ (pos, Just (color, Queen, hist)) ])
-          promoteSpaces gboard = do f <- ['A'..'H']
-                                    r <- [1, 8]
-                                    (color, history) <- maybeToList $ do (c, p, h) <- gboard!(f, r)
-                                                                         guard $ p == Pawn
-                                                                         return (c, h)
-                                    return ((f, r), color, history)
-

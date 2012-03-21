@@ -207,8 +207,8 @@ solveNewRot r dt is = r + v*dt * fromIntegral
     where
         v = 1 -- velocity
 
-considerMovement :: GameState -> InputState -> Maybe GameState
-considerMovement gs is = return . fromMaybe gs $ mouseTile >>= mover
+doMovement :: InputState -> GameState -> GameState
+doMovement is gs = fromMaybe gs $ mouseTile >>= mover
 
     where mouseTile = do let (x, y) = mousePos is
                          guard $ x >= 144 && x < 800 - 144
@@ -226,25 +226,30 @@ considerMovement gs is = return . fromMaybe gs $ mouseTile >>= mover
                     then select t
                     else place t
 
-considerUndo :: InputState -> GameState -> GameState
-considerUndo is gs = updateDisabledKeys gs [(KeyChar 'u', runUndo)] is
+doUndo :: InputState -> GameState -> GameState
+doUndo is gs = updateDisabledKeys gs [(KeyChar 'u', runUndo)] is
     where
         runUndo gs' = gs' { game = popIfAble (game gs') }
         popIfAble []  = error "No game states to pop. Someone dun goof'd."
         popIfAble [x] = [x]
         popIfAble (_:xs) = xs
 
+doPromote :: InputState -> GameState -> GameState
+doPromote is gs = foldr promoteIfPressed gs [ ('q', G.Queen)
+                                            , ('b', G.Bishop)
+                                            , ('k', G.Knight)
+                                            , ('r', G.Rook)
+                                            ]
+    where promoteIfPressed (k, p) g = updateDisabledKeys g [(KeyChar k, tryPromote p)] is
+          tryPromote p g = maybe g (\x -> g { game = x:(game g) }) $ G.promote (head $ game g) p
+
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Renderer)
-update gs !t is = let gs'  = considerUndo is $ fromMaybe gs (considerMovement gs is)
-                      gs'' = gs' { t0 = t
-                                 --, rectPos = solveNewPos (rectPos gs) is
-                                 , rectRot = solveNewRot (rectRot gs) dt is
-                                 }
-                   in return $!! ( gs''
+update gs !t is = let gs' = foldr ($) gs [doMovement is, doPromote is, doUndo is, doRot]
+                   in return $!! ( gs'
                                  , [ Loaded [hashed|"chess-square-w.png"|]
                                    , Loaded [hashed|"chess-square-b.png"|]
                                  ] ++ map Loaded allPieces
-                                 , display gs'' (mousePos is)
+                                 , display gs' (mousePos is)
                                  )
     where
         dt | g0 > 0 = t - g0
@@ -252,6 +257,10 @@ update gs !t is = let gs'  = considerUndo is $ fromMaybe gs (considerMovement gs
            | otherwise = error $ "So apparently, we have a time value less than 0: " ++ show g0
             where
                 g0 = t0 gs
+        doRot gs' = gs' { t0 = t
+                        --, rectPos = solveNewPos (rectPos gs') is
+                        , rectRot = solveNewRot (rectRot gs') dt is
+                        }
 
 initState :: GameState
 initState = GameState 0 (400, 300) 0 [G.initGame] Nothing []
