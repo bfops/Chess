@@ -243,8 +243,13 @@ doPromote is gs = foldr promoteIfPressed gs [ ('q', G.Queen)
     where promoteIfPressed (k, p) g = updateDisabledKeys g [(KeyChar k, tryPromote p)] is
           tryPromote p g = maybe g (\x -> g { game = x:(game g) }) $ G.promote (head $ game g) p
 
+doEnd :: GameState -> GameState
+doEnd gs' = fromMaybe gs' $ do gs <- listToMaybe $ game gs'
+                               guard.not $ G.canMove gs
+                               return $ gs' { game = [G.initGame], mvSrc = Nothing}
+
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Renderer)
-update gs !t is = let gs' = foldr ($) gs [doMovement is, doPromote is, doUndo is, doRot]
+update gs !t is = let gs' = foldr ($) gs [doEnd, doMovement is, doPromote is, doUndo is, doRot]
                    in return $!! ( gs'
                                  , [ Loaded [hashed|"chess-square-w.png"|]
                                    , Loaded [hashed|"chess-square-b.png"|]

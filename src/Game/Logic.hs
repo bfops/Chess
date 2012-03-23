@@ -8,6 +8,7 @@ module Game.Logic ( Color(..)
                   , Rank
                   , Position
                   , Board
+                  , canMove
                   , initGame
                   , move
                   , promote
@@ -183,10 +184,18 @@ isCheck color game = case filter (maybe False isKing . snd) . assocs $ board gam
                             (kingPos, _):_ -> any (threatens kingPos) . indices $ board game
     where threatens pos p = fromMaybe False $ do (c, piece, _) <- board game ! p
                                                  guard $ color /= c
-                                                 return . any (isThreat pos p) $ actionAttempts piece (turn game)
+                                                 return . any (isThreat pos p) $ actionAttempts piece c
                                         
-          isKing (c, piece, _) = color == c && piece == King
+          isKing (c, King, _) = color == c
+          isKing _ = False
           isThreat pos p = liftA2 (&&) ((Take ==).actionType) (elem pos . destinations game p)
+
+canMove :: GameState -> Bool
+canMove gs = not . null . concatMap moves . filter ((turn gs ==) . sel2) . mapMaybe reformat . assocs $ board gs
+    where
+          reformat (s, t) = (\(c, p, _) -> (s, c, p)) <$> t
+          moves :: (Position, Color, Piece) -> [GameState]
+          moves (s, c, p) = mapMaybe (move gs s) . concatMap (destinations gs s) $ actionAttempts p c
 
 -- | Attempt to move the piece from `src` to `dest` on `gameBoard`.
 move :: GameState
