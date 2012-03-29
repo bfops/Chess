@@ -23,6 +23,7 @@ import Data.Array.IArray
 import Data.Cycle
 import Data.Maybe
 import Data.List
+import Data.Singleton
 import Data.Tuple
 import Data.Tuple.All
 import Test.Framework
@@ -171,9 +172,7 @@ initGame = GameState initBoard Nothing White Nothing
 
 destinations :: GameState -> Position -> Action -> [Position]
 destinations game src action = filter isValidTarget . evalPos $ npos action
-    where evalPos (Disp d) = do let p = shift src d
-                                guard $ isValidPosition p
-                                return p
+    where evalPos (Disp d) = filter isValidPosition [shift src d]
           evalPos (Path d) = straightPath (board game) src d
 
           actionCond Move = isEmpty
@@ -184,22 +183,22 @@ destinations game src action = filter isValidTarget . evalPos $ npos action
 
 -- True iff `color` is in check on `board`.
 isCheck :: Color -> GameState -> Bool
-isCheck color game = case filter (maybe False isKing . snd) . assocs $ board game of
-                            [] -> error $ "No " ++ show color ++ " king!"
-                            (kingPos, _):_ -> any (threatens kingPos) . indices $ board game
-    where threatens pos p = fromMaybe False $ do (c, piece, _) <- board game ! p
-                                                 guard $ color /= c
-                                                 return . any (isThreat pos p) $ actionAttempts piece c
+isCheck color game = single errorMsg (isThreatened.fst) . filter (maybe False isKing . snd) . assocs $ board game
+    where
+          errorMsg = error $ "No " ++ show color ++ " king!"
+          threatens :: Position -> Position -> Bool
+          threatens d s = maybe False (canTake d s) $ board game ! s
+          canTake d s (c, piece, _) = color /= c && any (isThreat d s) (actionAttempts piece c)
                                         
           isKing (c, King, _) = color == c
           isKing _ = False
-          isThreat pos p = liftA2 (&&) ((Take ==).actionType) (elem pos . destinations game p)
+          isThreat d s a = actionType a == Take && d `elem` destinations game s a
+          isThreatened pos = any (threatens pos) . indices $ board game
 
 canMove :: GameState -> Bool
 canMove gs = not . null . concatMap moves . filter ((turn gs ==) . sel2) . mapMaybe reformat . assocs $ board gs
     where
           reformat (s, t) = (\(c, p, _) -> (s, c, p)) <$> t
-          moves :: (Position, Color, Piece) -> [GameState]
           moves (s, c, p) = mapMaybe (move gs s) . concatMap (destinations gs s) $ actionAttempts p c
 
 -- | Attempt to move the piece from `src` to `dest` on `gameBoard`.
@@ -211,49 +210,38 @@ move :: GameState
      -- ^ Position to move to
      -> Maybe GameState
      -- ^ Nothing if the move is invalid, Just the new state otherwise.
-move game src dest = do (color, piece, _) <- gameBoard!src
-                        guard . isNothing $ promotion game
-                        guard $ color == turn game
-                        guard . not . isFriendlyFire color $ gameBoard!dest
-
-                        let actions = filter (elem dest . destinations game src) $ actionAttempts piece color
-                        guard . not $ null actions
-                        let
-                            simpleUpdate = game { board = makeMove gameBoard src dest
-                                                , enPassant = Nothing
-                                                , turn = next $ turn game
-                                                }
-
-                            newGame = foldl' (\g f -> f g src dest) simpleUpdate (handlers $ head actions)
-                            
-                        guard . not $ isCheck color newGame
-                        return newGame
-
+move game src dest = mfilter preconds (gameBoard!src) >>= move' (game { board = makeMove gameBoard src dest
+                                                                      , enPassant = Nothing
+                                                                      , turn = next $ turn game
+                                                                      })
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False $ (color ==) . sel1
+
+          preconds (c, _, _) = isNothing (promotion game)
+                             && c == turn game
+                             && (not . isFriendlyFire c $ gameBoard!dest)
+                                 
+          actions (c, p, _) = filter (elem dest . destinations game src) $ actionAttempts p c
+          move' game0 x@(c, _, _) = mfilter (not.isCheck c) $ game' (actions x) game0
+          game' as game0 = foldl' (\g f -> f g src dest) game0 . handlers <$> listToMaybe as
 
           gameBoard = board game
 
 promote :: GameState       -- ^ The state of the game
         -> Piece           -- ^ The type of piece to promote to.
         -> Maybe GameState -- ^ Nothing if the promotion is invalid, Just the new state otherwise.
-promote g piece = do pos <- promotion g
-                     (c, _, h) <- (board g)!pos
-                     guard canPromote
-                     return $ g { board = (board g) // [(pos, Just (c, piece, h))]
-                                , promotion = Nothing
-                                }
+promote g piece = guard canPromote >> promotion g >>= liftA2 fmap game' (board g !)
     where canPromote = piece `elem` [Knight, Rook, Bishop, Queen]
+          game' pos (c, _, h) = g { board = (board g) // [(pos, Just (c, piece, h))]
+                                  , promotion = Nothing
+                                  }
 
 -- Return a straight path from `origin` to `dest`, terminating at the edge of
 -- the gameBoard, or when you hit another piece (includes that tile, doesn't include `origin`).
 straightPath :: Board -> Position -> (Delta, Delta) -> [Position]
 straightPath gameBoard origin d = unfoldr stepFunc . Just $ shift origin d
-    where stepFunc p = do pos <- p
-                          guard $ isValidPosition pos
-                          return (pos, nextPos pos)
-          nextPos p = do guard $ isEmpty gameBoard p
-                         return $ shift p d
+    where stepFunc p = (\x -> (x, nextPos x)) <$> mfilter isValidPosition p
+          nextPos p = guard (isEmpty gameBoard p) >> Just (shift p d)
 
 -- Just moves the piece, no checking.
 makeMove :: Board -> Position -> Position -> Board
@@ -265,8 +253,7 @@ moveAndTake :: [NPos] -> [Action]
 moveAndTake loci = [ Action t l [] [] | t <- [Move, Take], l <- loci ]
 
 symmetry :: [(Delta, Delta)] -> [(Delta, Delta)]
-symmetry ds = do d <- ds
-                 [d, swap d]
+symmetry = concatMap $ \d -> [d, swap d]
 
 actionAttempts :: Piece -> Color -> [Action]
 actionAttempts Pawn color = map addPromoteCheck
@@ -284,7 +271,7 @@ actionAttempts Pawn color = map addPromoteCheck
                                 then (1, 8)
                                 else (-1, 1)
 
-          fixPromote g _ d@(_, r) = g { promotion = (guard $ r == endRank) >> Just d }
+          fixPromote g _ d@(_, r) = g { promotion = guard (r == endRank) >> Just d }
 
           addPromoteCheck (Action a b c d) = Action a b c (fixPromote:d)
 
