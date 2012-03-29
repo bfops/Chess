@@ -9,6 +9,7 @@ module Game.Logic ( Color(..)
                   , Position
                   , Board
                   , canMove
+                  , tests
                   , initGame
                   , move
                   , promote
@@ -24,6 +25,7 @@ import Data.Maybe
 import Data.List
 import Data.Tuple
 import Data.Tuple.All
+import Test.Framework
 
 -- | Color of game pieces.
 data Color = White | Black
@@ -105,6 +107,9 @@ data Action = Action { actionType :: ActionType
                      , conds      :: [Condition]
                      , handlers   :: [Handler]
                      }
+
+tests :: [Test]
+tests = []
 
 zipT :: (a -> c -> r1) -> (b -> d -> r2) -> (a, b) -> (c, d) -> (r1, r2)
 zipT f g (a, b) (c, d) = (f a c, g b d)
