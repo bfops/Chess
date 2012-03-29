@@ -4,12 +4,13 @@
 module Game.Logic ( Color(..)
                   , Piece(..)
                   , GameState(..)
+                  , EndState(..)
                   , File
                   , Rank
                   , Position
                   , Board
-                  , canMove
                   , tests
+                  , end
                   , initGame
                   , move
                   , promote
@@ -19,6 +20,7 @@ module Game.Logic ( Color(..)
 import Control.Applicative
 import Control.DeepSeq
 import Control.Monad
+import Control.MonadCond
 import Data.Array.IArray
 import Data.Cycle
 import Data.Maybe
@@ -109,6 +111,12 @@ data Action = Action { actionType :: ActionType
                      , handlers   :: [Handler]
                      }
 
+-- | Different states in which the game may end.
+data EndState = Win Color
+              -- ^ One side has won
+              | Tie
+              -- ^ The game has ended with no winner.
+
 tests :: [Test]
 tests = []
 
@@ -195,11 +203,18 @@ isCheck color game = single errorMsg (isThreatened.fst) . filter (maybe False is
           isThreat d s a = actionType a == Take && d `elem` destinations game s a
           isThreatened pos = any (threatens pos) . indices $ board game
 
-canMove :: GameState -> Bool
-canMove gs = not . null . concatMap moves . filter ((turn gs ==) . sel2) . mapMaybe reformat . assocs $ board gs
+end :: GameState -> Maybe EndState
+end gs = if canMove
+         then Tie <?> isMatDraw
+         else Just $ if isCheck (turn gs) gs
+                     then Win . prev $ turn gs
+                     else Tie
     where
-          reformat (s, t) = (\(c, p, _) -> (s, c, p)) <$> t
-          moves (s, c, p) = mapMaybe (move gs s) . concatMap (destinations gs s) $ actionAttempts p c
+          canMove = any (not.null) . mapMaybe myMoves . assocs $ board gs
+          isMatDraw = filter (/= King) material `elem` [ [], [ Knight ], [ Bishop ] ]
+          material = mapMaybe (fmap sel2) . elems $ board gs
+          myMoves (s, t) = t >>= (<?>) <$> moves s <*> (turn gs ==).sel1
+          moves s (c, p, _) = mapMaybe (move gs s) . concatMap (destinations gs s) $ actionAttempts p c
 
 -- | Attempt to move the piece from `src` to `dest` on `gameBoard`.
 move :: GameState
@@ -230,7 +245,7 @@ move game src dest = mfilter preconds (gameBoard!src) >>= move' (game { board = 
 promote :: GameState       -- ^ The state of the game
         -> Piece           -- ^ The type of piece to promote to.
         -> Maybe GameState -- ^ Nothing if the promotion is invalid, Just the new state otherwise.
-promote g piece = guard canPromote >> promotion g >>= liftA2 fmap game' (board g !)
+promote g piece = guard canPromote >> promotion g >>= fmap <$> game' <*> (board g !)
     where canPromote = piece `elem` [Knight, Rook, Bishop, Queen]
           game' pos (c, _, h) = g { board = (board g) // [(pos, Just (c, piece, h))]
                                   , promotion = Nothing
@@ -241,7 +256,7 @@ promote g piece = guard canPromote >> promotion g >>= liftA2 fmap game' (board g
 straightPath :: Board -> Position -> (Delta, Delta) -> [Position]
 straightPath gameBoard origin d = unfoldr stepFunc . Just $ shift origin d
     where stepFunc p = (\x -> (x, nextPos x)) <$> mfilter isValidPosition p
-          nextPos p = guard (isEmpty gameBoard p) >> Just (shift p d)
+          nextPos p = shift p d <?> isEmpty gameBoard p
 
 -- Just moves the piece, no checking.
 makeMove :: Board -> Position -> Position -> Board
@@ -271,7 +286,7 @@ actionAttempts Pawn color = map addPromoteCheck
                                 then (1, 8)
                                 else (-1, 1)
 
-          fixPromote g _ d@(_, r) = g { promotion = guard (r == endRank) >> Just d }
+          fixPromote g _ d@(_, r) = g { promotion = d <?> (r == endRank)}
 
           addPromoteCheck (Action a b c d) = Action a b c (fixPromote:d)
 

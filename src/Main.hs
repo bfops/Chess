@@ -2,13 +2,15 @@
 module Main (main) where
 
 import Config
+import Control.Applicative
 import Control.DeepSeq
-import Control.Monad
+import Control.MonadCond
 import Data.Array
 import qualified Data.HashMap.Strict as M
 import Data.HashString
 import Data.List
 import Data.Maybe
+import Data.Singleton
 import Game.Engine
 import Game.Input
 import qualified Game.Logic as G
@@ -158,10 +160,10 @@ chessBoard gs | rendDims w /= rendDims b = error "White and black square texture
                                 | otherwise              = w
                   evenx = even x
                   eveny = even y
-                  renderTileContents brdPos = maybe [] renderPiece $ guard (not $ isMoving brdPos)
-                                                                   >> gameBoard!brdPos
-                  renderPiece (c, pce, _) = [(fromJust $ M.lookup (fileString c pce) pieceMap)
-                                            { pos = Right (HCenterAlign 0, VCenterAlign 0) }]
+                  renderTileContents :: G.Position -> [Renderer]
+                  renderTileContents p' = not (isMoving p') ?<< maybeToList (renderPiece <$> gameBoard!p')
+                  renderPiece (c, pce, _) = (fromJust $ M.lookup (fileString c pce) pieceMap)
+                                            { pos = Right (HCenterAlign 0, VCenterAlign 0) }
 
                   isMoving brdPos = maybe False (== brdPos) $ mvSrc gs
 
@@ -194,12 +196,6 @@ display gs (x, y) = (rectangleRenderer 600 600 red)
                                                         return $ (fromJust $ M.lookup (fileString c pce) pieceMap)
                                                                      { pos = Left (x - 144, y - 44) }
 
-
-{-
-solveNewPos :: Coord -> InputState -> Coord
-solveNewPos _ = mousePos
--}
-
 solveNewRot :: Double -> Double -> InputState -> Double
 solveNewRot r dt is = r + v*dt * fromIntegral
                                  ((fromEnum $ testKeys is [ KeyChar 'z' ])
@@ -210,21 +206,18 @@ solveNewRot r dt is = r + v*dt * fromIntegral
 doMovement :: InputState -> GameState -> GameState
 doMovement is gs = fromMaybe gs $ mouseTile >>= mover
 
-    where mouseTile = do let (x, y) = mousePos is
-                         guard $ x >= 144 && x < 800 - 144
-                         guard $ y >=  44 && y < 600 -  44
-                         return $ G.shift ('A', 1) ((x - 144) `div` 64, (y - 44) `div` 64)
+    where mouseTile = (<?>) <$> tilePos <*> isValidPos $ mousePos is
+          tilePos (x, y) = G.shift ('A', 1) ((x - 144) `div` 64, (y - 44) `div` 64)
+          isValidPos (x, y) = (x >= 144) && (x < 800 - 144)
+                            && (y >= 44) && (y < 600 - 44)
 
-          select t = do guard . isNothing $ mvSrc gs
-                        return $ gs { mvSrc = Just t }
-
-          place t = do src <- mvSrc gs
-                       return $ (maybe gs (\s -> gs { game = s:(game gs) }) $ G.move (curGame gs) src t)
-                                    { mvSrc = Nothing }
+          select t = gs { mvSrc = Just t }
+          place t src = (maybe gs addMove $ G.move (curGame gs) src t) { mvSrc = Nothing }
+          addMove m = gs { game = m : (game gs) }
 
           mover t = if testKeys is [ LeftButton ]
-                    then select t
-                    else place t
+                    then select t <?> isNothing (mvSrc gs)
+                    else place t <$> mvSrc gs
 
 doUndo :: InputState -> GameState -> GameState
 doUndo is gs = updateDisabledKeys gs [(KeyChar 'u', runUndo)] is
@@ -243,10 +236,13 @@ doPromote is gs = foldr promoteIfPressed gs [ ('q', G.Queen)
     where promoteIfPressed (k, p) g = updateDisabledKeys g [(KeyChar k, tryPromote p)] is
           tryPromote p g = maybe g (\x -> g { game = x:(game g) }) $ G.promote (head $ game g) p
 
+iff :: Bool -> a -> a -> a
+iff b x y = if b then x else y
+
 doEnd :: GameState -> GameState
-doEnd gs' = fromMaybe gs' $ do gs <- listToMaybe $ game gs'
-                               guard.not $ G.canMove gs
-                               return $ gs' { game = [G.initGame], mvSrc = Nothing}
+doEnd = iff <$> isDone <*> reset <*> id
+    where isDone = single False (isJust . G.end) . game
+          reset gs = gs { game = [G.initGame], mvSrc = Nothing}
 
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Renderer)
 update gs !t is = let gs' = foldr ($) gs [doEnd, doMovement is, doPromote is, doUndo is, doRot]
