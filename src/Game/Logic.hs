@@ -205,7 +205,7 @@ isCheck color game = single errorMsg (isThreatened.fst) . filter (maybe False is
 
 end :: GameState -> Maybe EndState
 end gs = if canMove
-         then Tie <?> isMatDraw
+         then mcond Tie isMatDraw
          else Just $ if isCheck (turn gs) gs
                      then Win . prev $ turn gs
                      else Tie
@@ -213,7 +213,7 @@ end gs = if canMove
           canMove = any (not.null) . mapMaybe myMoves . assocs $ board gs
           isMatDraw = filter (/= King) material `elem` [ [], [ Knight ], [ Bishop ] ]
           material = mapMaybe (fmap sel2) . elems $ board gs
-          myMoves (s, t) = t >>= (<?>) <$> moves s <*> (turn gs ==).sel1
+          myMoves (s, t) = t >>= mcond <$> moves s <*> (turn gs ==).sel1
           moves s (c, p, _) = mapMaybe (move gs s) . concatMap (destinations gs s) $ actionAttempts p c
 
 -- | Attempt to move the piece from `src` to `dest` on `gameBoard`.
@@ -256,7 +256,7 @@ promote g piece = guard canPromote >> promotion g >>= fmap <$> game' <*> (board 
 straightPath :: Board -> Position -> (Delta, Delta) -> [Position]
 straightPath gameBoard origin d = unfoldr stepFunc . Just $ shift origin d
     where stepFunc p = (\x -> (x, nextPos x)) <$> mfilter isValidPosition p
-          nextPos p = shift p d <?> isEmpty gameBoard p
+          nextPos p = mcond (shift p d) $ isEmpty gameBoard p
 
 -- Just moves the piece, no checking.
 makeMove :: Board -> Position -> Position -> Board
@@ -286,7 +286,7 @@ actionAttempts Pawn color = map addPromoteCheck
                                 then (1, 8)
                                 else (-1, 1)
 
-          fixPromote g _ d@(_, r) = g { promotion = d <?> (r == endRank)}
+          fixPromote g _ d@(_, r) = g { promotion = mcond d $ r == endRank}
 
           addPromoteCheck (Action a b c d) = Action a b c (fixPromote:d)
 

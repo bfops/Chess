@@ -160,8 +160,7 @@ chessBoard gs | rendDims w /= rendDims b = error "White and black square texture
                                 | otherwise              = w
                   evenx = even x
                   eveny = even y
-                  renderTileContents :: G.Position -> [Renderer]
-                  renderTileContents p' = not (isMoving p') ?<< maybeToList (renderPiece <$> gameBoard!p')
+                  renderTileContents = ifm <$> not.isMoving <*> map renderPiece . maybeToList . (gameBoard!)
                   renderPiece (c, pce, _) = (fromJust $ M.lookup (fileString c pce) pieceMap)
                                             { pos = Right (HCenterAlign 0, VCenterAlign 0) }
 
@@ -206,7 +205,7 @@ solveNewRot r dt is = r + v*dt * fromIntegral
 doMovement :: InputState -> GameState -> GameState
 doMovement is gs = fromMaybe gs $ mouseTile >>= mover
 
-    where mouseTile = (<?>) <$> tilePos <*> isValidPos $ mousePos is
+    where mouseTile = mcond <$> tilePos <*> isValidPos $ mousePos is
           tilePos (x, y) = G.shift ('A', 1) ((x - 144) `div` 64, (y - 44) `div` 64)
           isValidPos (x, y) = (x >= 144) && (x < 800 - 144)
                             && (y >= 44) && (y < 600 - 44)
@@ -216,7 +215,7 @@ doMovement is gs = fromMaybe gs $ mouseTile >>= mover
           addMove m = gs { game = m : (game gs) }
 
           mover t = if testKeys is [ LeftButton ]
-                    then select t <?> isNothing (mvSrc gs)
+                    then mcond (select t) . isNothing $ mvSrc gs
                     else place t <$> mvSrc gs
 
 doUndo :: InputState -> GameState -> GameState
