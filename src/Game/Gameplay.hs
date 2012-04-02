@@ -56,12 +56,13 @@ type Rank = Int
 type Position = (File, Rank)
 type Delta = Int
 
--- | A square in a chessgameBoard either contains nothing or a colored piece, with move history.
-type Tile = Maybe (Color, Piece, [Position])
+-- | Information pieces carry with them around the board.
+type PieceInfo = (Color, Piece, [Position])
+type Tile = Maybe PieceInfo
 -- | Basic gameBoard type for describing game state.
 type Board = Array Position Tile
 
--- | Contains all the information to uniquely describe a chess game.
+-- | Contains all the information to describe a chess game.
 data GameState = GameState { board     :: Board
                              -- ^ The current state of the board.
                              , enPassant :: Maybe Position
@@ -70,14 +71,17 @@ data GameState = GameState { board     :: Board
                              -- ^ Whose turn is it?
                              , promotion :: Maybe Position
                              -- ^ Does a piece need to be promoted?
+                             , taken     :: [PieceInfo]
+                             -- ^ Which pieces have been taken from which sides?
                              }
 
 instance NFData GameState where
-    rnf (GameState a b c d) = rnf a `seq`
-                              rnf b `seq`
-                              rnf c `seq`
-                              rnf d `seq`
-                              ()
+    rnf (GameState a b c d e) = rnf a `seq`
+                                rnf b `seq`
+                                rnf c `seq`
+                                rnf d `seq`
+                                rnf e `seq`
+                                ()
 
 type Condition = GameState
                -- ^ The game being played.
@@ -176,7 +180,7 @@ initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
 
 -- | Initial state of the game.
 initGame :: GameState
-initGame = GameState initBoard Nothing White Nothing
+initGame = GameState initBoard Nothing White Nothing []
 
 destinations :: GameState -> Position -> Action -> [Position]
 destinations game src action = filter isValidTarget . evalPos $ npos action
@@ -237,8 +241,10 @@ move game src dest = mfilter preconds (gameBoard!src) >>= move' (game { board = 
                              && (not . isFriendlyFire c $ gameBoard!dest)
                                  
           actions (c, p, _) = filter (elem dest . destinations game src) $ actionAttempts p c
-          move' game0 x@(c, _, _) = mfilter (not.isCheck c) $ game' (actions x) game0
+          move' game0 x@(c, _, _) = mfilter (not.isCheck c) $ fixTakes <$> game' (actions x) game0
           game' as game0 = foldl' (\g f -> f g src dest) game0 . handlers <$> listToMaybe as
+
+          fixTakes gs = gs { taken = maybeToList (board gs ! dest) ++ (taken gs) }
 
           gameBoard = board game
 
