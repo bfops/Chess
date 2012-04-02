@@ -1,21 +1,21 @@
 {-# LANGUAGE TupleSections #-}
 -- | All game logic specific to the game of Chess goes here. This keeps all our
 --   chess specific code isolated.
-module Game.Logic ( Color(..)
-                  , Piece(..)
-                  , GameState(..)
-                  , EndState(..)
-                  , File
-                  , Rank
-                  , Position
-                  , Board
-                  , tests
-                  , end
-                  , initGame
-                  , move
-                  , promote
-                  , shift
-                  ) where
+module Game.Gameplay ( Color(..)
+                     , Piece(..)
+                     , GameState(..)
+                     , EndState(..)
+                     , File
+                     , Rank
+                     , Position
+                     , Board
+                     , tests
+                     , end
+                     , initGame
+                     , move
+                     , promote
+                     , shift
+                     ) where
 
 import Control.Applicative
 import Control.DeepSeq

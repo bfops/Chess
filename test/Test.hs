@@ -8,7 +8,7 @@ import Test.QuickCheck
 import Test.HUnit
 
 import Data.List
-import qualified Game.Logic
+import qualified Game.Gameplay
 
 {-# ANN module "HLint: ignore" #-}
 
@@ -28,7 +28,7 @@ tests = [
                      ],
                 testCase "sort7" test_sort7
             ],
-        testGroup "Game logic" Game.Logic.tests
+        testGroup "Game logic" Game.Gameplay.tests
     ]
 
 

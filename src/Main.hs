@@ -13,7 +13,7 @@ import Data.Maybe
 import Data.Singleton
 import Game.Engine
 import Game.Input
-import qualified Game.Logic as G
+import qualified Game.Gameplay as G
 import Game.Physics.Collision()
 import Game.Physics.Integration()
 import Game.Render
