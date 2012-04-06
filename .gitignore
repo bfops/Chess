@@ -1,7 +1,9 @@
 *.sw[a-z]
 *.o
 *.a
-dist/
-inst/
-cabal-dev/
 report.html
+
+# directories
+dist
+inst
+cabal-dev
