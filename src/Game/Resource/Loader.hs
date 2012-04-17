@@ -15,6 +15,7 @@ module Game.Resource.Loader ( LoadableResource(..)
 import           Control.Applicative
 import           Control.Arrow ( second )
 import           Control.Concurrent
+import           Control.Combinator
 import           Control.DeepSeq
 import           Data.IVar                    as IV
 import           Data.Conduit                 as Cond
@@ -212,9 +213,9 @@ chooseResources rl reqs = do (reqs', rl') <- solveExistingResources reqs rl
 syncLoad :: (LoadableResource i r, NFData i)
          => [HashString]
          -> IO [(HashString, i)]
-syncLoad names = runResourceT $ C.sourceList names
-                             $$ diskLoaderConduit
-                             =$ C.consume
+syncLoad names = C.sourceList names
+               $$ diskLoaderConduit
+               =$ C.consume
 
 -- | Returns the given textures as asynchronous promises, zipped with
 --   their names.
@@ -226,14 +227,17 @@ asyncLoad (name:xs) = do iv <- IV.new
                          _  <- forkIO $ IV.write iv =<< fromDisk (fromHashString name)
                          ((name, iv):) <$> asyncLoad xs
 
+cMapMaybe :: Monad m => (a -> Maybe b) -> Conduit a m b
+cMapMaybe f = C.map f =$= C.concatMap maybeToList
+
 -- | Converts resource names into loaded resources, zipped with their
 --   original name.
 diskLoaderConduit :: (LoadableResource i r, NFData i) => Conduit HashString IO (HashString, i)
-diskLoaderConduit = C.mapM (\name -> (name,) <$> fromDisk (fromHashString name)) -- Load the resources, keep the name.
-                  -- Replace the (Text, Maybe ..) with Maybe (Text, ...)
-                 =$= C.map (\(name, tex) -> (name,) <$> tex)
+diskLoaderConduit = C.mapM load -- Load the resources, keep the name.
                   -- Only keep successfully loaded textures.
-                 =$= C.filter isJust =$= C.map (force . fromJust)
+                 =$= cMapMaybe keep
+    where load name = (name,) <$> fromDisk (fromHashString name)
+          keep (name, t) = (name,) . force <$> t
 
 -- | Uploads all deferred resources to graphics memory.
 runDeferred :: LoadableResource i r
@@ -256,28 +260,24 @@ getResource rl name = M.lookup name $ loaded rl
 
 -- | Returns only the synchronous requests' 'HashString's.
 syncRequests :: [ResourceRequest] -> [HashString]
-syncRequests = foldr filt []
+syncRequests = mapMaybe filt
     where
-        filt rr soFar = case rr of
-                          Loaded hs -> hs:soFar
-                          Preload _ -> soFar
+        filt (Loaded hs) = Just hs
+        filt (Preload _) = Nothing
 {-# INLINE syncRequests #-}
 
 -- | Returns only the asynchronous requests' 'HashString's.
 asyncRequests :: [ResourceRequest] -> [HashString]
-asyncRequests = foldr filt []
+asyncRequests = mapMaybe filt
     where
-        filt rr soFar = case rr of
-                            Preload hs -> hs:soFar
-                            Loaded  _  -> soFar
+        filt (Loaded _) = Nothing
+        filt (Preload hs) = Just hs
 {-# INLINE asyncRequests #-}
 
 infixl 3 `insertListM`
 
 -- | Inserts a list of key-value pairs into a map.
 insertListM :: (Hashable a, Ord a) => M.HashMap a b -> [(a, b)] -> M.HashMap a b
-insertListM = L.foldl' ins
-    where
-        ins t (k, x) = M.insert k x t
+insertListM = L.foldl' (uncurry . ap3 M.insert)
 {-# INLINE insertListM #-}
 {-# SPECIALIZE insertListM :: M.HashMap HashString b -> [(HashString, b)] -> M.HashMap HashString b #-}

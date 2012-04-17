@@ -16,20 +16,19 @@ Executable Chess
     Main-is:           Main.hs
     GHC-Options:       -Wall -threaded -rtsopts=all -fllvm -fno-warn-orphans
     Extensions:        UnboxedTuples
-    Other-Modules:     Paths_Chess
 
     Build-Depends:     base,
-                       containers ==0.4.*,
-                       unordered-containers ==0.1.*,
-                       transformers ==0.2.*,
-                       text ==0.11.*,
-                       stm ==2.3.*,
-                       stm-chans ==1.3.*,
+                       containers ==0.*,
+                       unordered-containers ==0.*,
+                       transformers ==0.*,
+                       text ==0.*,
+                       stm ==2.*,
+                       stm-chans ==1.*,
                        aeson ==0.*,
-                       conduit ==0.2.*,
-                       stm-conduit ==0.2.4.*,
-                       OpenGLRaw ==1.2.*,
-                       OpenGL ==2.5.*,
+                       conduit ==0.*,
+                       stm-conduit ==0.*,
+                       OpenGLRaw ==1.*,
+                       OpenGL ==2.*,
                        GLUT ==2.*,
                        JuicyPixels ==1.2,
                        hslogger ==1.*,
@@ -37,18 +36,18 @@ Executable Chess
                        vector ==0.9.*,
                        StateVar ==1.*,
                        bytestring ==0.*,
-                       template-haskell ==2.7.*,
-                       hashable ==1.1.*,
-                       filepath ==1.3.*,
-                       deepseq ==1.3.*,
-                       time ==1.4.*,
-                       data-ivar ==0.30.*,
-                       monad-par ==0.1.*,
-                       global-variables ==1.0.*,
-                       tuple ==0.2.*,
+                       template-haskell ==2.*,
+                       hashable ==1.*,
+                       filepath ==1.*,
+                       deepseq ==1.*,
+                       time ==1.*,
+                       data-ivar ==0.*,
+                       monad-par ==0.*,
+                       global-variables ==1.*,
+                       tuple ==0.*,
                        hmatrix ==0.13.*,
                        test-framework ==0.*,
-                       pointless-fun ==1.1.*
+                       pointless-fun ==1.*
 
 test-suite ChessTests
     type: exitcode-stdio-1.0

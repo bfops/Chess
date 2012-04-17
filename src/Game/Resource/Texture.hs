@@ -34,7 +34,6 @@ import           Foreign.Ptr
 import           Game.Resource.Loadable
 import qualified Graphics.Rendering.OpenGL.Monad as GL
 import qualified Graphics.Rendering.OpenGL.Monad.Unsafe as UGLY
-import qualified Paths_Chess                     as CP -- :)
 import           System.FilePath
 import           System.Log.Logger
 
@@ -131,7 +130,7 @@ noJPEG       img         = img
 --
 --   > do tex <- getImage "yellow-dot.png"
 getImage :: T.Text -> IO (Maybe DynamicImage)
-getImage name = do name' <- CP.getDataFileName $ Config.texturePrefix </> T.unpack name
+getImage name = do let name' = Config.texturePrefix </> T.unpack name
                    wrappedTex <- readImage name'
 
                    case wrappedTex of
@@ -169,7 +168,7 @@ loadTexture' tex handle = do let tex'        = noJPEG tex -- OpenGL can't handle
                              -- can avoid a copy (unsafeWith), and run it on the
                              -- graphics card as if it were a graphics command
                              -- (unsafeRunOnGraphicsCard).
-                             UGLY.unsafeRunOnGraphicsCard . V.unsafeWith idata $ UGLY.unsafeInnerRunGraphics . \ptr ->
+                             UGLY.unsafeRunOnGraphicsCard . V.unsafeWith idata $ UGLY.runGraphics . \ptr ->
                                 GL.texImage2D Nothing
                                               GL.NoProxy
                                               0

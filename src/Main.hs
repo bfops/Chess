@@ -235,9 +235,6 @@ doPromote is gs = foldr promoteIfPressed gs [ ('q', G.Queen)
     where promoteIfPressed (k, p) g = updateDisabledKeys g [(KeyChar k, tryPromote p)] is
           tryPromote p g = maybe g (\x -> g { game = x:(game g) }) $ G.promote (head $ game g) p
 
-iff :: Bool -> a -> a -> a
-iff b x y = if b then x else y
-
 doEnd :: GameState -> GameState
 doEnd = iff <$> isDone <*> reset <*> id
     where isDone = single False (isJust . G.end) . game

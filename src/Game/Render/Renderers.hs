@@ -8,7 +8,6 @@ module Game.Render.Renderers ( rectangleRenderer
                              ) where
 
 import qualified Config
-import qualified Paths_Chess as CP
 import Data.HashString
 import qualified Data.Text as T
 import Graphics.Rendering.OpenGL.Monad as GL
@@ -56,7 +55,7 @@ getTexDims s = do img <- getImage (T.pack s)
                                   error $ "Texture \"" ++ s ++ "\" not found at " ++ p
 
 getTexPath :: String -> IO String
-getTexPath = CP.getDataFileName . (Config.texturePrefix </>)
+getTexPath = return . (Config.texturePrefix </>)
 
 texRenderQuoter :: String -> Q Exp
 texRenderQuoter s = [| textureRenderer $(hString s') $(lift . unsafePerformIO $ getTexDims s') |]

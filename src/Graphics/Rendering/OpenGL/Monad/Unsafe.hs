@@ -11,7 +11,6 @@ module Graphics.Rendering.OpenGL.Monad.Unsafe ( GL
                                               , runGraphics
                                               , liftSTM
                                               , unsafeRunOnGraphicsCard
-                                              , unsafeInnerRunGraphics
                                               ) where
 
 import Control.Applicative
@@ -50,7 +49,7 @@ unsafeRunOnGraphicsCard = GL
 --   another graphics monad. This is for situations like:
 --
 --   @
---   UGLY.unsafeRunOnGraphicsCard . V.unsafeWith idata $ UGLY.unsafeInnerRunGraphics . \ptr ->
+--   UGLY.unsafeRunOnGraphicsCard . V.unsafeWith idata $ UGLY.runGraphics . \ptr ->
 --      GL.texImage2D Nothing
 --                    GL.NoProxy
 --                    0
@@ -65,5 +64,3 @@ unsafeRunOnGraphicsCard = GL
 --   Since we use an MVar to protect all OpenGL operations, this will prevent
 --   a deadlock with the MVar being taken twice.
 
-unsafeInnerRunGraphics :: GL a -> IO a
-unsafeInnerRunGraphics (GL x) = x
