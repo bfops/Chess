@@ -13,7 +13,7 @@ before being committed.
 
 To build this project, You need to do the standard configure-build-test cycle.
 
-    cabal configure --enable-tests --prefix=/absolute/path/to/checkout/inst
+    cabal configure --enable-tests
     cabal build # wait...
     cabal test
 
@@ -30,11 +30,6 @@ For test failures, well, report those too.
 After you have successfully built and test the game, you can start playing with
 it by running:
 
-    cabal copy
-
-This copies all distribution files into the inst/ subdirectory. Now you can run
-the game with:
-
-    inst/bin/Chess [flags]
+    dist/build/Chess/Chess [flags]
 
 And voila! You should be good to go.

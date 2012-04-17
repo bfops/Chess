@@ -250,13 +250,13 @@ runDeferred (ResourceLoader l d p) = let (ns, is) = unzip $ M.toList d
                                               M.empty
                                               p
 
--- | Gets a resource from the loader. If Nothing is returned, then either the
---   resource does not exist, or it has not been loaded yet.
+-- | Gets a resource from the loader.
 getResource :: LoadableResource i r
             => ResourceLoader i r
             -> HashString
             -> Maybe r
-getResource rl name = M.lookup name $ loaded rl
+            -- ^ Nothing if the resource hasn't been loaded (for any reason, such as file-not-found).
+getResource = flip ($) `on1` loaded `on2` M.lookup
 
 -- | Returns only the synchronous requests' 'HashString's.
 syncRequests :: [ResourceRequest] -> [HashString]

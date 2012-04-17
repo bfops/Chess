@@ -8,6 +8,8 @@ module Game.Render.Renderers ( rectangleRenderer
                              ) where
 
 import qualified Config
+import Control.Applicative
+import Control.Arrow ((&&&))
 import Data.HashString
 import qualified Data.Text as T
 import Graphics.Rendering.OpenGL.Monad as GL
@@ -39,23 +41,16 @@ renderText _ _ = undefined
 textureRenderer :: HashString -- ^ The name of the texture. Use the 'hashed' quasiquoter.
                 -> Dimensions
                 -> Renderer
-textureRenderer n ds = defaultRenderer { render = renderFunc
+textureRenderer n ds = defaultRenderer { render = maybe failRender renderTexture . loadResource n
                                        , rendDims = ds
                                        }
     where
-        renderFunc ls = case getResource (textureL ls) n of
-                            Just tex -> renderTexture tex
-                            Nothing  -> rectRender ds red 
+          failRender = rectRender ds red
+          loadResource = flip $ getResource . textureL
 
 getTexDims :: String -> IO Dimensions
-getTexDims s = do img <- getImage (T.pack s) 
-                  case img of
-                    Just x  -> return (imageWidth' x, imageHeight' x)
-                    Nothing -> do p <- getTexPath s
-                                  error $ "Texture \"" ++ s ++ "\" not found at " ++ p
-
-getTexPath :: String -> IO String
-getTexPath = return . (Config.texturePrefix </>)
+getTexDims s = maybe textureError (imageWidth' &&& imageHeight') <$> getImage (T.pack s)
+    where textureError = error $ "Texture \"" ++ s ++ "\" not found at " ++ Config.texturePrefix </> s
 
 texRenderQuoter :: String -> Q Exp
 texRenderQuoter s = [| textureRenderer $(hString s') $(lift . unsafePerformIO $ getTexDims s') |]

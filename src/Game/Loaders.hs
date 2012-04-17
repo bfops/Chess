@@ -5,7 +5,7 @@ module Game.Loaders ( Loaders(..)
                     , runLoadersDeferred
                     ) where
 
-import Control.Applicative
+import Control.Combinator
 
 import Game.Resource.Loader
 import Game.Resource.Texture
@@ -22,10 +22,10 @@ data Loaders = Loaders { textureL :: ResourceLoader DynamicImage Texture
 --
 --   Do we have a whole bunch of loaders? Run the resource choosers in parallel!
 updateLoaders :: Loaders -> [ResourceRequest] -> IO Loaders
-updateLoaders l rs = Loaders <$> chooseResources (textureL l) rs
+updateLoaders = Loaders `fmap3` chooseResources . textureL
 
 -- | Calls 'runDeferred' on all loaders.
 --
 --   Adding a loader? Applicative its 'runDeferred' function on the end here.
 runLoadersDeferred :: Loaders -> GL Loaders
-runLoadersDeferred l = Loaders <$> runDeferred (textureL l)
+runLoadersDeferred = Loaders `fmap2` runDeferred . textureL

@@ -7,10 +7,11 @@ module Game.Render.Core ( Renderer(..)
                         , Offset
                         , defaultRenderer
                         , updateWindow
-                        , HAlign(..)
-                        , VAlign(..)
+                        , Align(..)
                         ) where
 
+import Control.Applicative
+import Control.Arrow
 import Control.DeepSeq ( NFData(..) )
 import Control.Monad
 import Data.Maybe
@@ -34,21 +35,12 @@ import Util.Defs
 --   @
 type Offset = Int
 
--- | A type used for specifying horizontal alignment.
---   each alignment aligns part side of the object with that part of the parent.
-data HAlign = LeftAlign    !Offset
-            | RightAlign   !Offset
-            | HCenterAlign !Offset
+-- | A type used for specifying alignment.
+data Align = MinAlign    !Offset -- Align to the numerically largest side.
+           | MaxAlign    !Offset -- Align to the numerically smallest side.
+           | CenterAlign !Offset -- Align to the center.
 
-instance NFData HAlign
-
--- | A type used for specifying vertical alignment.
---   each alignment aligns that part of the object with that part of the parent.
-data VAlign = TopAlign     !Offset
-            | BottomAlign  !Offset
-            | VCenterAlign !Offset
-
-instance NFData VAlign
+instance NFData Align
 
 -- | A renderable is anything which can be drawn onto the screen.
 --   To build one, use renderer and override the necessary arguments.
@@ -66,9 +58,9 @@ data Renderer = Renderer { render :: Loaders -> GL ()
                          , pos :: Either Coord -- Specify absolute position
                                                -- of the bottom-left corner
                                                -- of the object.
-                                         (HAlign, VAlign) -- Specify alignment
-                                                          -- relative to the
-                                                          -- parent
+                                         (Align, Align) -- Specify alignment
+                                                        -- relative to the
+                                                        -- parent
 
                          , rendDims :: Dimensions -- ^ The dimensions of the object.
 
@@ -120,24 +112,15 @@ defaultRenderer = Renderer { render = const $ return ()
 absPos :: Dimensions -- ^ The dimensions of the parent object.
        -> Renderer  -- ^ The renderer whose new position we need.
        -> Coord
-absPos parentDims r = case pos r of
-                        Left p -> p
-                        Right (hAlign, vAlign) -> let
-                          x' = case hAlign of
-                                  LeftAlign off    -> px + off
-                                  RightAlign off   -> px - dx + off
-                                  HCenterAlign off -> (px - dx) `div` 2 + off
-
-                          y' = case vAlign of
-                                  BottomAlign off  -> py + off
-                                  TopAlign off     -> py - dy + off
-                                  VCenterAlign off -> (py - dy) `div` 2 + off
-                          in (x', y')
-                          where (dx, dy) = rendDims r
-                                (px, py) = parentDims
+absPos (px, py) = either id <$> convertPos . rendDims <*> pos
+    where convertPos (dx, dy) = linearConvert px dx *** linearConvert py dy
+          linearConvert :: Int -> Int -> Align -> Int
+          linearConvert p _ (MinAlign off) = p + off
+          linearConvert p d (MaxAlign off) = p - d + off
+          linearConvert p d (CenterAlign off) = (p - d) `div` 2 + off
 
 rad2deg :: Double -> Double
-rad2deg rad = rad * 180 / pi
+rad2deg = (/ pi) . (* 180)
 {-# INLINE rad2deg #-}
 
 -- | Draws the given renderer, and all its children to the current window.

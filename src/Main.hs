@@ -162,7 +162,7 @@ chessBoard gs | rendDims w /= rendDims b = error "White and black square texture
                   eveny = even y
                   renderTileContents = ifm <$> not.isMoving <*> map renderPiece . maybeToList . (gameBoard!)
                   renderPiece (c, pce, _) = (fromJust $ M.lookup (fileString c pce) pieceMap)
-                                            { pos = Right (HCenterAlign 0, VCenterAlign 0) }
+                                            { pos = Right (CenterAlign 0, CenterAlign 0) }
 
                   isMoving brdPos = maybe False (== brdPos) $ mvSrc gs
 
@@ -179,14 +179,14 @@ chessBoard gs | rendDims w /= rendDims b = error "White and black square texture
 
 display :: GameState -> Coord -> Renderer
 display gs (x, y) = (rectangleRenderer 600 600 red)
-                        { pos = Right ( HCenterAlign 0
-                                      , VCenterAlign 0
+                        { pos = Right ( CenterAlign 0
+                                      , CenterAlign 0
                                       )
                         , children = [ boardRender ] ++ moveRender
                         }
                     where boardRender = (chessBoard gs)
-                                           { pos = Right ( HCenterAlign 0
-                                                         , VCenterAlign 0
+                                           { pos = Right ( CenterAlign 0
+                                                         , CenterAlign 0
                                                          )
                                             , rotation = rectRot gs
                                             }
