@@ -19,6 +19,7 @@ import           Control.Arrow ( second )
 import           Control.Concurrent
 import           Control.Combinator
 import           Control.DeepSeq
+import           Control.Monad
 import           Data.IVar                    as IV
 import           Data.Conduit                 as Cond
 import qualified Data.Conduit.List            as C
@@ -96,25 +97,37 @@ emptyResourceLoader = ResourceLoader M.empty M.empty M.empty
 --   Please see chooseTextureFlow.png for an explaination of the data flow
 --   associated with this function. It's a tad bit complicated.
 solveExistingResources :: (LoadableResource i r, NFData i, NFData r)
-                       =>     [ResourceRequest] -> ResourceLoader i r
-                       -> IO ([ResourceRequest],   ResourceLoader i r)
-solveExistingResources urs rl = do d'' <- d'
-                                   let rs'' = rs' l' d'' p'
-                                    in return $!! (rs'', ResourceLoader l' d'' p')
+                       =>     ResourceLoader i r -> [ResourceRequest]
+                       -> IO (ResourceLoader i r  , [ResourceRequest])
+solveExistingResources rl urs = do d' <- updateDeferred
+                                   -- A texture is loaded if its a requested resource and in the existing
+                                   -- loaded map, or exists in the preloaded map as a texture.
+                                   --
+                                   -- O(n) - 1 sync pass.
+                                   let l' = M.fromList $ mapMaybe keepIfLoaded sync
+                                   return $!! (ResourceLoader l' d' p', rs' l' d')
     where
+        fromLoaded (FullyLoaded x) = Just x
+        fromLoaded _ = Nothing
+
+        fromPartial (PartialLoad x) = Just x
+        fromPartial _ = Nothing
+
+        keepIfLoaded req = (req,) <$> msum [ M.lookup req l, M.lookup req p >>= fromLoaded ]
+
+        -- Returns false if the given request is a Preload request, and
+        -- already exists as a load request in the given set.
+        noDups :: S.HashSet ResourceRequest -> ResourceRequest -> Bool
+        noDups s req = mustLoad req || not (S.member (load $ resourceId req) s)
+
         -- Resources, but with duplicate values filtered out.
         --
         -- If a resource existed as a 'Loaded' _and_ a 'Preload', the
         -- 'Loaded' clause is preferred.
         --
         -- O(n) - 2 passes.
-        rs :: S.HashSet ResourceRequest
-        rs = S.filter =<< noDups $ S.fromList urs
-            where
-                -- Returns false if the given request is a Preload request, and
-                -- already exists as a load request in the given set.
-                noDups :: S.HashSet ResourceRequest -> ResourceRequest -> Bool
-                noDups s req = mustLoad req || not (S.member (load $ resourceId req) s)
+        rsUnique :: S.HashSet ResourceRequest
+        rsUnique = S.filter =<< noDups $ S.fromList urs
 
         -- Requests are only valid if they don't exist in one of the existing
         -- texture maps.
@@ -123,57 +136,32 @@ solveExistingResources urs rl = do d'' <- d'
         rs' :: LoadableResource i r
             => M.HashMap HashString r
             -> M.HashMap HashString i
-            -> M.HashMap HashString (PossiblyLoaded i r)
             -> [ResourceRequest]
-        rs' l'' d'' p'' = S.toList $ S.filter (not . ap2 S.member loadedTextures . resourceId) rs
-            where
-                loadedTextures = S.fromList $ M.keys l'' ++ M.keys d'' ++ M.keys p''
-
-        -- A texture is loaded if its a requested resource and in the existing
-        -- loaded map, or exists in the preloaded map as a texture.
-        --
-        -- O(n) - 1 sync pass.
-        l' = uncurry (L.foldl' addIfPreloaded) $ L.foldl' addIfLoaded (M.empty, []) sync
-            where
-                addIfLoaded (m, xs) req = case M.lookup req l of
-                                            Just tex -> (M.insert req tex m, xs)
-                                            Nothing  -> (m, req:xs)
-                addIfPreloaded m req = case M.lookup req p of
-                                          Just (FullyLoaded tex) -> M.insert req tex m
-                                          _                      -> m
+        rs' l' d' = let loadedTextures = S.fromList $ M.keys l' ++ M.keys d' ++ M.keys p'
+                    in S.toList $ S.filter (not . ap2 S.member loadedTextures . resourceId) rsUnique
 
         -- A texture is deferred if its a requested resource and in the
         -- existing deferred map, or exists in the preload map as a promise.
         --
         -- O(n) - 2 sync passes, 1 async pass.
-        d' = do preloadedVals <- mapM (IV.blocking . IV.read) alreadyPreloaded
-                let zipped = zip preloadedKeys $ catMaybes preloadedVals
-                 in return $ S.foldl' (\m r -> addIfDeferred (resourceId r) m) M.empty rs -- not just sync. See the diagram.
-                           `insertListM` zipped
+        updateDeferred = savePreloaded <$> mapM (IV.blocking . IV.read) alreadyPreloaded
             where
-                addIfDeferred req m = case M.lookup req d of
-                                         Just img -> M.insert req img m
-                                         Nothing  -> m
+                savePreloaded preloadedVals = insertListM (S.foldr (keepDeferred . resourceId) M.empty rsUnique)
+                                                          (zip preloadedKeys $ catMaybes preloadedVals)
+                keepDeferred h m = maybe m (M.insert h `ap2` m) $ M.lookup h d
+                keepPartial req = (req,) <$> (M.lookup req p >>= fromPartial)
+
                 -- only promote the synchronous requests from preload.
-                (preloadedKeys, alreadyPreloaded) = unzip $ L.foldl' addIfPartial [] sync
-                    where
-                        addIfPartial xs req = case M.lookup req p of
-                                                 Just (PartialLoad iv) -> (req, iv):xs
-                                                 _                     -> xs
+                (preloadedKeys, alreadyPreloaded) = unzip $ mapMaybe keepPartial sync
 
         -- A texture is preloaded if it has been requested as one, and is either
         -- already in 'loaded' or 'preloaded'.
-        p' = uncurry (L.foldl' fromLoaded) $ L.foldl' fromPreloaded (M.empty, []) async
-            where
-                fromLoaded m req = case M.lookup req l of
-                                      Just tex -> M.insert req (FullyLoaded tex) m
-                                      Nothing  -> m
-                fromPreloaded (m, xs) req = case M.lookup req p of
-                                               Just x  -> (M.insert req x m, xs)
-                                               Nothing -> (m, req:xs)
+        keepLoaded req = (req, ) <$> msum [ M.lookup req p, FullyLoaded <$> M.lookup req l ]
 
-        sync  = syncRequests  $ S.toList rs
-        async = asyncRequests $ S.toList rs
+        p' = M.fromList $ mapMaybe keepLoaded async
+
+        sync  = syncRequests  $ S.toList rsUnique
+        async = asyncRequests $ S.toList rsUnique
         l = loaded    rl
         d = deferred  rl
         p = preloaded rl
@@ -195,12 +183,12 @@ chooseResources :: (LoadableResource i r, NFData i, NFData r)
                 -> IO (ResourceLoader i r)
                 -- ^ A new resource loader, with all the required textures in
                 --   place.
-chooseResources rl reqs = do (reqs', rl') <- solveExistingResources reqs rl
-                             newlyLoaded  <- syncLoad  $ syncRequests reqs'
-                             asyncLoaded  <- asyncLoad $ asyncRequests reqs'
-                             return $!! ResourceLoader (loaded rl')
-                                                       (deferred  rl' `insertListM` newlyLoaded)
-                                                       (preloaded rl' `insertListM` map (second PartialLoad) asyncLoaded)
+chooseResources = (loadNew =<<) `fmap2` solveExistingResources
+    where loadNew (rl', reqs') = do s <- syncLoad (syncRequests reqs')
+                                    a <- asyncLoad (asyncRequests reqs')
+                                    return $ force (updateLists rl' s a)
+          updateLists rl' = ResourceLoader (loaded rl') `on1` insertListM (deferred rl') `on2` updateAsync rl'
+          updateAsync rl' = insertListM (preloaded rl') . map (second PartialLoad)
 
 -- | Loads a list of textures by name, returning all successfully loaded
 --   textures in a list, zipped with its name.
@@ -216,10 +204,10 @@ syncLoad names = C.sourceList names
 asyncLoad :: LoadableResource i r
           => [HashString]
           -> IO [(HashString, IV.IVar (Maybe i))]
-asyncLoad = mapM loadAndSave
-    where loadAndSave = fmap <$> (,) <*> (IV.new >>=) . runLoad
-          runLoad name = (<$) <*> forkIO . loadTo name . IV.write 
-          loadTo = (>>=) . fromDisk . fromHashString
+asyncLoad = mapM $ \hs -> (hs,) <$> saveLoad hs
+    where 
+          saveLoad hs = IV.new >>= (<$) <*> void . forkIO . doLoad hs
+          doLoad hs iv = IV.write iv =<< fromDisk (fromHashString hs)
 
 cMapMaybe :: Monad m => (a -> Maybe b) -> Conduit a m b
 cMapMaybe f = C.map f =$= C.concatMap maybeToList
@@ -227,19 +215,17 @@ cMapMaybe f = C.map f =$= C.concatMap maybeToList
 -- | Converts resource names into loaded resources, zipped with their
 --   original name.
 diskLoaderConduit :: (LoadableResource i r, NFData i) => Conduit HashString IO (HashString, i)
-diskLoaderConduit = C.mapM doLoad
-                  -- Only keep successfully loaded textures.
-                 =$= cMapMaybe keep
-    where doLoad name = (name,) <$> fromDisk (fromHashString name) -- Load the resources, keep the name.
-          keep (name, t) = (name,) . force <$> t
+diskLoaderConduit = C.mapM doLoad =$= cMapMaybe keepSuccessful
+    where doLoad name = (name,) <$> fromDisk (fromHashString name)
+          keepSuccessful (name, t) = (name,) . force <$> t
 
 -- | Uploads all deferred resources to graphics memory.
 runDeferred :: LoadableResource i r
             => ResourceLoader i r
             -> GL (ResourceLoader i r)
-runDeferred (ResourceLoader l d p) = uncurry (fmap `on1` withInsert `on2` toGraphics) . unzip $ M.toList d
+runDeferred (ResourceLoader l d p) = uncurry (fmap `on1` updateLoaded `on2` toGraphics) . unzip $ M.toList d
     where
-          withInsert x y = ResourceLoader (l `insertListM` zip x y) M.empty p
+          updateLoaded x y = ResourceLoader (l `insertListM` zip x y) M.empty p
 
 -- | Gets a resource from the loader.
 getResource :: LoadableResource i r
@@ -247,7 +233,7 @@ getResource :: LoadableResource i r
             -> HashString
             -> Maybe r
             -- ^ Nothing if the resource hasn't been loaded (for any reason, such as file-not-found).
-getResource = flip ($) `on1` loaded `on2` M.lookup
+getResource l h = M.lookup h $ loaded l
 
 -- | Returns only the synchronous requests' 'HashString's.
 syncRequests :: [ResourceRequest] -> [HashString]
