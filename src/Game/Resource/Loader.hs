@@ -4,9 +4,11 @@
 --   "eventually". See the documentation for 'ResourceLoader' for more
 --   information.
 module Game.Resource.Loader ( LoadableResource(..)
+                            , ResourceRequest
                             , ResourceLoader
-                            , ResourceRequest(..)
                             , emptyResourceLoader
+                            , load
+                            , preload
                             , chooseResources
                             , runDeferred
                             , getResource
@@ -29,23 +31,13 @@ import           Data.Maybe
 import           Game.Resource.Loadable
 import           Graphics.Rendering.OpenGL.Monad
 
--- | A resource request is used to signify that the following resource is
---   required to render the current frame. A resource will begin loading when
---   it first appears as either a 'Preload' or 'Loaded', and the frame will
---   not be rendered until all 'Loaded' resources are fully resident and ready
---   to go.
-data ResourceRequest = Preload HashString -- ^ Will begin loading, but there is
-                                          --   no guarantee it will be done
-                                          --   before the frame is rendered.
-                     | Loaded  HashString -- ^ Guaranteed to be loaded before the
-                                          --   frame is rendered.
-    deriving (Eq, Ord)
-
--- | Pulls the 'HashString' out of a 'ResourceRequest'.
-resourceId :: ResourceRequest -> HashString
-resourceId (Preload h) = h
-resourceId (Loaded  h) = h
-{-# INLINE resourceId #-}
+-- | A load request for a hashed resource.
+data ResourceRequest = ResourceRequest { mustLoad   :: Bool
+                                       -- ^ If the Bool is True, load before the frame is rendered.
+                                       , resourceId :: HashString
+                                       -- ^ Hash of the resource to load.
+                                       }
+    deriving (Eq)
 
 -- | The 'ResourceLoader' keeps track of all resources currently loaded in
 --   memory and on the graphics card. It is specialized for every type of
@@ -59,8 +51,7 @@ data PossiblyLoaded i r = PartialLoad (IV.IVar (Maybe i))
                         | FullyLoaded r
 
 instance NFData ResourceRequest where
-    rnf (Preload h) = rnf h
-    rnf (Loaded  h) = rnf h
+    rnf = rnf . resourceId
     {-# INLINE rnf #-}
 
 instance Hashable ResourceRequest where
@@ -79,6 +70,12 @@ instance NFData r => NFData (PossiblyLoaded i r) where
     {-# INLINE rnf #-}
 
 instance NFData (IV.IVar a)
+
+load :: HashString -> ResourceRequest
+load = ResourceRequest True
+
+preload :: HashString -> ResourceRequest
+preload = ResourceRequest False
 
 -- | Creates a new resource loader, with no resources loaded.
 emptyResourceLoader :: LoadableResource i r => ResourceLoader i r
@@ -112,14 +109,12 @@ solveExistingResources urs rl = do d'' <- d'
         --
         -- O(n) - 2 passes.
         rs :: S.HashSet ResourceRequest
-        rs = let t = S.fromList urs
-              in S.filter (noDups t) t
+        rs = S.filter =<< noDups $ S.fromList urs
             where
                 -- Returns false if the given request is a Preload request, and
                 -- already exists as a load request in the given set.
                 noDups :: S.HashSet ResourceRequest -> ResourceRequest -> Bool
-                noDups _ (Loaded   _ ) = True
-                noDups s (Preload rid) = not $ S.member (Loaded rid) s
+                noDups s req = mustLoad req || not (S.member (load $ resourceId req) s)
 
         -- Requests are only valid if they don't exist in one of the existing
         -- texture maps.
@@ -130,10 +125,9 @@ solveExistingResources urs rl = do d'' <- d'
             -> M.HashMap HashString i
             -> M.HashMap HashString (PossiblyLoaded i r)
             -> [ResourceRequest]
-        rs' l'' d'' p'' = S.toList $ S.filter (not . flip S.member loadedTextures . resourceId) rs
+        rs' l'' d'' p'' = S.toList $ S.filter (not . ap2 S.member loadedTextures . resourceId) rs
             where
-                loadedTextures :: S.HashSet HashString
-                loadedTextures = S.fromList (M.keys l'' ++ M.keys d'' ++ M.keys p'')
+                loadedTextures = S.fromList $ M.keys l'' ++ M.keys d'' ++ M.keys p''
 
         -- A texture is loaded if its a requested resource and in the existing
         -- loaded map, or exists in the preloaded map as a texture.
@@ -222,10 +216,10 @@ syncLoad names = C.sourceList names
 asyncLoad :: LoadableResource i r
           => [HashString]
           -> IO [(HashString, IV.IVar (Maybe i))]
-asyncLoad   []      = return []
-asyncLoad (name:xs) = do iv <- IV.new
-                         _  <- forkIO $ IV.write iv =<< fromDisk (fromHashString name)
-                         ((name, iv):) <$> asyncLoad xs
+asyncLoad = mapM loadAndSave
+    where loadAndSave = fmap <$> (,) <*> (IV.new >>=) . runLoad
+          runLoad name = (<$) <*> forkIO . loadTo name . IV.write 
+          loadTo = (>>=) . fromDisk . fromHashString
 
 cMapMaybe :: Monad m => (a -> Maybe b) -> Conduit a m b
 cMapMaybe f = C.map f =$= C.concatMap maybeToList
@@ -233,22 +227,19 @@ cMapMaybe f = C.map f =$= C.concatMap maybeToList
 -- | Converts resource names into loaded resources, zipped with their
 --   original name.
 diskLoaderConduit :: (LoadableResource i r, NFData i) => Conduit HashString IO (HashString, i)
-diskLoaderConduit = C.mapM load -- Load the resources, keep the name.
+diskLoaderConduit = C.mapM doLoad
                   -- Only keep successfully loaded textures.
                  =$= cMapMaybe keep
-    where load name = (name,) <$> fromDisk (fromHashString name)
+    where doLoad name = (name,) <$> fromDisk (fromHashString name) -- Load the resources, keep the name.
           keep (name, t) = (name,) . force <$> t
 
 -- | Uploads all deferred resources to graphics memory.
 runDeferred :: LoadableResource i r
             => ResourceLoader i r
             -> GL (ResourceLoader i r)
-runDeferred (ResourceLoader l d p) = let (ns, is) = unzip $ M.toList d
-                                      in do rs <- toGraphics is
-                                            return $ ResourceLoader
-                                              (l `insertListM` zip ns rs)
-                                              M.empty
-                                              p
+runDeferred (ResourceLoader l d p) = uncurry (fmap `on1` withInsert `on2` toGraphics) . unzip $ M.toList d
+    where
+          withInsert x y = ResourceLoader (l `insertListM` zip x y) M.empty p
 
 -- | Gets a resource from the loader.
 getResource :: LoadableResource i r
@@ -260,18 +251,12 @@ getResource = flip ($) `on1` loaded `on2` M.lookup
 
 -- | Returns only the synchronous requests' 'HashString's.
 syncRequests :: [ResourceRequest] -> [HashString]
-syncRequests = mapMaybe filt
-    where
-        filt (Loaded hs) = Just hs
-        filt (Preload _) = Nothing
+syncRequests = map resourceId . filter mustLoad
 {-# INLINE syncRequests #-}
 
 -- | Returns only the asynchronous requests' 'HashString's.
 asyncRequests :: [ResourceRequest] -> [HashString]
-asyncRequests = mapMaybe filt
-    where
-        filt (Loaded _) = Nothing
-        filt (Preload hs) = Just hs
+asyncRequests = map resourceId . filter (not . mustLoad)
 {-# INLINE asyncRequests #-}
 
 infixl 3 `insertListM`

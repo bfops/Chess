@@ -243,9 +243,9 @@ doEnd = iff <$> isDone <*> reset <*> id
 update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Renderer)
 update gs !t is = let gs' = foldr ($) gs [doEnd, doMovement is, doPromote is, doUndo is, doRot]
                    in return $!! ( gs'
-                                 , [ Loaded [hashed|"chess-square-w.png"|]
-                                   , Loaded [hashed|"chess-square-b.png"|]
-                                 ] ++ map Loaded allPieces
+                                 , [ load [hashed|"chess-square-w.png"|]
+                                   , load [hashed|"chess-square-b.png"|]
+                                 ] ++ map load allPieces
                                  , display gs' (mousePos is)
                                  )
     where
