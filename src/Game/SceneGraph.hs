@@ -26,14 +26,17 @@ module Game.SceneGraph ( -- * Basic Data Types
                        , sceneMap
                        ) where
 
-import Control.Applicative
+import Prelewd hiding (toList, join, (<>))
+
+import Impure
+
 import Control.DeepSeq
 import Control.Monad.Par
-import Data.Foldable ( Foldable )
 import Data.Function.Pointless
-import Data.Traversable
 import Data.Typeable
+import Storage.List (init)
 import Numeric.LinearAlgebra
+import Text.Show
 
 -- | Represents an N-dimensional scene graph, with objects at the leaves, and
 --   transformations applied in a hierarchical fashion.
@@ -43,7 +46,7 @@ import Numeric.LinearAlgebra
 data SceneGraph a = Object a
                   | Transform !Transformation !(SceneGraph a)
                   | Branch [SceneGraph a]
-    deriving (Show, Functor, Foldable, Traversable, Typeable)
+    deriving (Show, Functor, Foldable, Typeable)
 
 instance NFData a => NFData (SceneGraph a) where
     rnf (Transform t g) = rnf t `seq` rnf g
@@ -239,7 +242,7 @@ scaleGraph :: Vector Double -- ^ The N-dimensional vector of values to scale by.
 scaleGraph v = Scale v $ scaleMat v
 
 translateMat :: Vector Double -> Matrix Double
-translateMat v = fromColumns $ (init . toColumns . ident $ dim v + 1) ++ [vappend 1.0 v]
+translateMat v = fromColumns $ ((<?> error "Empty vector") . init . toColumns . ident $ dim v + 1) `mappend` [vappend 1.0 v]
 
 -- | Translates an n-dimensional scene graph by the given amount. Bigger values
 --   mean bigger objects. 1.0 means no scaling.
@@ -263,7 +266,7 @@ optimize (Branch xs)  = optBranch xs
             where
                 -- merges sub-branches up into their parent.
                 f y ys = case optimize y of
-                            Branch zs -> zs ++ ys
+                            Branch zs -> zs `mappend` ys
                             g         -> g:ys
 optimize (Transform t g) = go
     where

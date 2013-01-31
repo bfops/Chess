@@ -7,11 +7,16 @@ module Game.Render.Renderers ( rectangleRenderer
                              , textRenderer
                              ) where
 
+import Prelewd
+
+import IO
+import Impure
+
 import qualified Config
-import Control.Applicative
-import Control.Arrow ((&&&))
 import Data.HashString
+import Data.String (String)
 import qualified Data.Text as T
+import Data.Tuple
 import Graphics.Rendering.OpenGL.Monad as GL
 import Game.Engine
 import Game.Render.Colors
@@ -48,9 +53,9 @@ textureRenderer n ds = defaultRenderer { render = maybe failRender renderTexture
           failRender = rectRender ds red
           loadResource = flip $ getResource . textureL
 
-getTexDims :: String -> IO Dimensions
+getTexDims :: String -> SystemIO Dimensions
 getTexDims s = maybe textureError (imageWidth' &&& imageHeight') <$> getImage (T.pack s)
-    where textureError = error $ "Texture \"" ++ s ++ "\" not found at " ++ Config.texturePrefix </> s
+    where textureError = error $ "Texture \"" <> s <> "\" not found at " <> Config.texturePrefix </> s
 
 texRenderQuoter :: String -> Q Exp
 texRenderQuoter s = [| textureRenderer $(hString s') $(lift . unsafePerformIO $ getTexDims s') |]
@@ -83,7 +88,7 @@ renderPrimitive' :: GL.Color a
                                  --   (x, y).
                  -> GL ()
 renderPrimitive' primTy col verts = do GL.color col
-                                       GL.renderPrimitive primTy $ mapM_ (uncurry vertex') verts
+                                       GL.renderPrimitive primTy $ traverse_ (uncurry vertex') verts
 
 -- | A simple debug renderer. Draw this if you're just experimenting with
 --   layout.
@@ -93,7 +98,7 @@ rectangleRenderer :: GL.Color a
                   -> a    -- ^ The color of the desired rectangle.
                   -> Renderer
 rectangleRenderer width height col =
-    defaultRenderer { render = const $ rectRender (width, height) col
+    defaultRenderer { render = \_-> rectRender (width, height) col
                     , rendDims = (width, height)
                     }
 

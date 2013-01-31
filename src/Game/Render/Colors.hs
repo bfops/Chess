@@ -7,6 +7,8 @@
 module Game.Render.Colors where
 -- No explicit export list. Just export everything.
 
+import Prelewd
+
 import Graphics.Rendering.OpenGL.GL as GL
 
 red, green, blue, white, black :: Color3 GLdouble

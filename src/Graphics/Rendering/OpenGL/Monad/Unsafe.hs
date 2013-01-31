@@ -13,13 +13,16 @@ module Graphics.Rendering.OpenGL.Monad.Unsafe ( GL
                                               , unsafeRunOnGraphicsCard
                                               ) where
 
-import Control.Applicative
+import Prelewd
+
+import IO
+
 import Control.Concurrent.STM
 
 -- | A wrapper for any actions performed on a graphics card. This allows us to
 --   have a concurrent, yet easily thread-safe main game loop. Thank god for a
 --   powerful type system.
-newtype GL a = GL (IO a)
+newtype GL a = GL (SystemIO a)
     deriving (Functor, Applicative, Monad)
 
 -- | Runs a set of graphics actions in the IO monad.
@@ -27,7 +30,7 @@ newtype GL a = GL (IO a)
 --   This action is thread-safe, and can therefore be used from multiple
 --   threads. Every time we 'runGraphics', every graphical operation within is
 --   atomic with respect to all other graphics being run.
-runGraphics :: GL a -> IO a
+runGraphics :: GL a -> SystemIO a
 runGraphics (GL x) = x
 {-# INLINE runGraphics #-}
 
@@ -41,7 +44,7 @@ liftSTM = unsafeRunOnGraphicsCard . atomically
 --
 --   Please, for the love of god, only use this on _actual_ graphics commands.
 --   Anything else defeats the point entirely.
-unsafeRunOnGraphicsCard :: IO a -> GL a
+unsafeRunOnGraphicsCard :: SystemIO a -> GL a
 unsafeRunOnGraphicsCard = GL
 {-# INLINE unsafeRunOnGraphicsCard #-}
 

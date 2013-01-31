@@ -4,18 +4,22 @@ module Game.Engine ( runGame
                    , getResource
                    ) where
 
+import Prelewd
+
+import IO
+
 import           Config
 
-import           Control.Applicative
 import           Control.Concurrent
 import           Control.Concurrent.STM
 
-import           Data.Function
 import           Data.IORef
 import qualified Data.Text     as T
 import           Data.Ratio
 import           Data.Time.Clock
 import           Data.Time.Clock.POSIX
+import           Data.Tuple
+import           Text.Show
 
 import Game.Input as I
 import Game.Loaders
@@ -46,9 +50,7 @@ runGame :: T.Text
         -- ^ The initial game's state.
         -> (gameState ->
            Double ->
-           InputState -> IO (gameState,
-                            [ResourceRequest],
-                            Renderer))
+           InputState -> SystemIO (gameState, [ResourceRequest], Renderer))
         -- ^ Updates the game's state, given a current time (in seconds), and
         --   the keyboard/mouse input vector. All computationally expensive
         --   tasks should be done in here.
@@ -58,7 +60,7 @@ runGame :: T.Text
         --
         --   The third element in the returned value will be used for drawing
         --   the scene described by the update function.
-        -> IO ()
+        -> SystemIO ()
 runGame title initState updateT = do runGraphics $ getArgsAndInitialize
                                                  >> initialDisplayMode $= [ DoubleBuffered
                                                                          , RGBAMode
@@ -86,11 +88,11 @@ runGame title initState updateT = do runGraphics $ getArgsAndInitialize
                                      killThread tid
 
 runUpdateLoop :: GameState a
-              -> (a -> Double -> InputState -> IO (a, [ResourceRequest], Renderer))
-              -> IO ()
+              -> (a -> Double -> InputState -> SystemIO (a, [ResourceRequest], Renderer))
+              -> SystemIO ()
 runUpdateLoop gs updateT = getPOSIXTime >>= go
     where
-        go :: NominalDiffTime -> IO ()
+        go :: NominalDiffTime -> SystemIO ()
         go t1 = do t2 <- waitFor (t1 + framePeriod)
  
                    us <- readIORef $ userState gs
@@ -114,7 +116,7 @@ runUpdateLoop gs updateT = getPOSIXTime >>= go
 
 -- | Waits for it to be at least the given time, and returns the time for "now"
 --   as a convenience.
-waitFor :: NominalDiffTime -> IO NominalDiffTime
+waitFor :: NominalDiffTime -> SystemIO NominalDiffTime
 waitFor targetTime = do currentTime <- getPOSIXTime
                         case compare currentTime targetTime of
                             LT -> do threadDelay $ floor ((targetTime - currentTime) * 1e6)
@@ -124,7 +126,7 @@ waitFor targetTime = do currentTime <- getPOSIXTime
                             -- awhile to display. Let's do that in a different
                             -- thread so we don't slow down the simulation.
                             GT -> do _ <- forkIO . debugM "Game.Engine.update"
-                                       $ "Missed the framerate deadline by " ++ show ((ceiling $ (currentTime - targetTime)*1e3) :: Integer) ++ " ms."
+                                       $ "Missed the framerate deadline by " <> show ((ceiling $ (currentTime - targetTime)*1e3) :: Integer) <> " ms."
                                      getPOSIXTime
 
 -- | How long a frame is, in seconds.
@@ -132,7 +134,7 @@ framePeriod :: NominalDiffTime
 framePeriod = realToFrac $ 1 % targetFramerate
 
 -- | The GLUT 'displayCallback' hook.
-display :: GameState a -> Window -> IO ()
+display :: GameState a -> Window -> SystemIO ()
 display gs w = do (d, rend, ls) <- modifyMVar (loaders gs) $ \ls ->
                        do ls' <- runGraphics $ runLoadersDeferred ls
                           (d, r) <- atomically $ do rend <- readTVar $ toRender gs
@@ -143,13 +145,13 @@ display gs w = do (d, rend, ls) <- modifyMVar (loaders gs) $ \ls ->
                               >> postRedisplay (Just w)
 
 -- | The GLUT 'reshapeCallback' hook.
-reshape :: GameState a -> Size -> IO ()
+reshape :: GameState a -> Size -> SystemIO ()
 reshape gs sz@(Size x y) = do atomically $ writeTVar (windowDims gs) (fromIntegral x, fromIntegral y)
                               runGraphics $ do viewport $= (Position 0 0, sz)
                                                matrixMode $= Projection
                                                loadIdentity
                                                ortho2D 0 (fromIntegral x) 0 (fromIntegral y)
-                              infoM "Game.Engine.reshape" $ "Window dimensions: " ++ show x ++ "x" ++ show y
+                              infoM "Game.Engine.reshape" $ "Window dimensions: " <> show x <> "x" <> show y
 
 -- | Initializes a new window, and returns its dimensions.
 initWindow :: T.Text -> Dimensions -> GL Window
@@ -166,9 +168,9 @@ initWindow title dims  = do w <- createWindow title
                             blendFunc $= (SrcAlpha, OneMinusSrcAlpha)
                             lineWidth $= 2
 
-                            mapM_ (\ty -> hint ty $= Nicest) [ PointSmooth
-                                                            , LineSmooth
-                                                            , PolygonSmooth
-                                                            ]
+                            traverse_ (\ty -> hint ty $= Nicest) [ PointSmooth
+                                                                 , LineSmooth
+                                                                 , PolygonSmooth
+                                                                 ]
 
                             return w

@@ -4,6 +4,10 @@
 module Game.Resource.Loadable ( LoadableResource(..)
                               ) where
 
+import Prelewd hiding (Text)
+
+import IO
+
 import Data.Text
 import Graphics.Rendering.OpenGL.Monad ( GL )
 
@@ -20,7 +24,7 @@ class LoadableResource i r | i -> r, r -> i where
     -- | Loads a resource (with the given name) from disk, and into an
     --   intermediate RAM-only buffer. This buffer can be of any type, denoted
     --   by 'IntermediateRepr'.
-    fromDisk   :: Text -> IO (Maybe i)
+    fromDisk   :: Text -> SystemIO (Maybe i)
 
     -- | Uploads a RAM-loaded resource onto the graphics card. If no such
     --   upload is needed, set the body of this function to @return@,

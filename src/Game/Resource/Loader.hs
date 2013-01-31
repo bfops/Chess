@@ -14,10 +14,12 @@ module Game.Resource.Loader ( LoadableResource(..)
                             , getResource
                             ) where
 
-import           Control.Applicative
-import           Control.Arrow ( second )
+import Prelewd
+
+import Impure hiding (force)
+import IO
+
 import           Control.Concurrent
-import           Control.Combinator
 import           Control.DeepSeq
 import           Control.Monad
 import           Data.IVar                    as IV
@@ -27,10 +29,10 @@ import           Data.Hashable
 import qualified Data.HashMap.Strict          as M
 import qualified Data.HashSet                 as S
 import           Data.HashString
-import           Data.List                    as L
-import           Data.Maybe
+import Data.Tuple
 import           Game.Resource.Loadable
 import           Graphics.Rendering.OpenGL.Monad
+import Storage.List
 
 -- | A load request for a hashed resource.
 data ResourceRequest = ResourceRequest { mustLoad   :: Bool
@@ -56,8 +58,8 @@ instance NFData ResourceRequest where
     {-# INLINE rnf #-}
 
 instance Hashable ResourceRequest where
-    hash = hash . resourceId
-    {-# INLINE hash #-}
+    hashWithSalt = hashWithSalt <%> resourceId
+    {-# INLINE hashWithSalt #-}
 
 instance (NFData i, NFData r) => NFData (ResourceLoader i r) where
     rnf (ResourceLoader l d p) = rnf l `seq`
@@ -97,8 +99,8 @@ emptyResourceLoader = ResourceLoader M.empty M.empty M.empty
 --   Please see chooseTextureFlow.png for an explaination of the data flow
 --   associated with this function. It's a tad bit complicated.
 solveExistingResources :: (LoadableResource i r, NFData i, NFData r)
-                       =>     ResourceLoader i r -> [ResourceRequest]
-                       -> IO (ResourceLoader i r  , [ResourceRequest])
+                       =>           ResourceLoader i r -> [ResourceRequest]
+                       -> SystemIO (ResourceLoader i r  , [ResourceRequest])
 solveExistingResources rl urs = do d' <- updateDeferred
                                    -- A texture is loaded if its a requested resource and in the existing
                                    -- loaded map, or exists in the preloaded map as a texture.
@@ -137,8 +139,8 @@ solveExistingResources rl urs = do d' <- updateDeferred
             => M.HashMap HashString r
             -> M.HashMap HashString i
             -> [ResourceRequest]
-        rs' l' d' = let loadedTextures = S.fromList $ M.keys l' ++ M.keys d' ++ M.keys p'
-                    in S.toList $ S.filter (not . ap2 S.member loadedTextures . resourceId) rsUnique
+        rs' l' d' = let loadedTextures = S.fromList $ M.keys l' <> M.keys d' <> M.keys p'
+                    in S.toList $ S.filter (not . flip S.member loadedTextures . resourceId) rsUnique
 
         -- A texture is deferred if its a requested resource and in the
         -- existing deferred map, or exists in the preload map as a promise.
@@ -147,8 +149,8 @@ solveExistingResources rl urs = do d' <- updateDeferred
         updateDeferred = savePreloaded <$> mapM (IV.blocking . IV.read) alreadyPreloaded
             where
                 savePreloaded preloadedVals = insertListM (S.foldr (keepDeferred . resourceId) M.empty rsUnique)
-                                                          (zip preloadedKeys $ catMaybes preloadedVals)
-                keepDeferred h m = maybe m (M.insert h `ap2` m) $ M.lookup h d
+                                                          (zip preloadedKeys $ mapMaybe id preloadedVals)
+                keepDeferred h m = maybe m (M.insert h `flip` m) $ M.lookup h d
                 keepPartial req = (req,) <$> (M.lookup req p >>= fromPartial)
 
                 -- only promote the synchronous requests from preload.
@@ -180,21 +182,21 @@ chooseResources :: (LoadableResource i r, NFData i, NFData r)
                 -> [ResourceRequest]
                 -- ^ A list of textures that will be required in the next
                 --   render iteration.
-                -> IO (ResourceLoader i r)
+                -> SystemIO (ResourceLoader i r)
                 -- ^ A new resource loader, with all the required textures in
                 --   place.
-chooseResources = (loadNew =<<) `fmap2` solveExistingResources
+chooseResources = (loadNew =<<) <$$> solveExistingResources
     where loadNew (rl', reqs') = do s <- syncLoad (syncRequests reqs')
                                     a <- asyncLoad (asyncRequests reqs')
                                     return $ force (updateLists rl' s a)
-          updateLists rl' = ResourceLoader (loaded rl') `on1` insertListM (deferred rl') `on2` updateAsync rl'
-          updateAsync rl' = insertListM (preloaded rl') . map (second PartialLoad)
+          updateLists rl' = ResourceLoader (loaded rl') . insertListM (deferred rl') <%> updateAsync rl'
+          updateAsync rl' = insertListM (preloaded rl') . map (map PartialLoad)
 
 -- | Loads a list of textures by name, returning all successfully loaded
 --   textures in a list, zipped with its name.
 syncLoad :: (LoadableResource i r, NFData i)
          => [HashString]
-         -> IO [(HashString, i)]
+         -> SystemIO [(HashString, i)]
 syncLoad names = C.sourceList names
                $$ diskLoaderConduit
                =$ C.consume
@@ -203,18 +205,18 @@ syncLoad names = C.sourceList names
 --   their names.
 asyncLoad :: LoadableResource i r
           => [HashString]
-          -> IO [(HashString, IV.IVar (Maybe i))]
+          -> SystemIO [(HashString, IV.IVar (Maybe i))]
 asyncLoad = mapM $ \hs -> (hs,) <$> saveLoad hs
     where 
           saveLoad hs = IV.new >>= (<$) <*> void . forkIO . doLoad hs
           doLoad hs iv = IV.write iv =<< fromDisk (fromHashString hs)
 
 cMapMaybe :: Monad m => (a -> Maybe b) -> Conduit a m b
-cMapMaybe f = C.map f =$= C.concatMap maybeToList
+cMapMaybe f = C.map f =$= C.concatMap (\m -> m <&> (:[]) <?> [])
 
 -- | Converts resource names into loaded resources, zipped with their
 --   original name.
-diskLoaderConduit :: (LoadableResource i r, NFData i) => Conduit HashString IO (HashString, i)
+diskLoaderConduit :: (LoadableResource i r, NFData i) => Conduit HashString SystemIO (HashString, i)
 diskLoaderConduit = C.mapM doLoad =$= cMapMaybe keepSuccessful
     where doLoad name = (name,) <$> fromDisk (fromHashString name)
           keepSuccessful (name, t) = (name,) . force <$> t
@@ -223,7 +225,7 @@ diskLoaderConduit = C.mapM doLoad =$= cMapMaybe keepSuccessful
 runDeferred :: LoadableResource i r
             => ResourceLoader i r
             -> GL (ResourceLoader i r)
-runDeferred (ResourceLoader l d p) = uncurry (fmap `on1` updateLoaded `on2` toGraphics) . unzip $ M.toList d
+runDeferred (ResourceLoader l d p) = uncurry (fmap . updateLoaded <%> toGraphics) . unzip $ M.toList d
     where
           updateLoaded x y = ResourceLoader (l `insertListM` zip x y) M.empty p
 
@@ -249,6 +251,6 @@ infixl 3 `insertListM`
 
 -- | Inserts a list of key-value pairs into a map.
 insertListM :: (Hashable a, Ord a) => M.HashMap a b -> [(a, b)] -> M.HashMap a b
-insertListM = L.foldl' (uncurry . ap3 M.insert)
+insertListM = foldl' (uncurry . \x y z -> M.insert y z x)
 {-# INLINE insertListM #-}
 {-# SPECIALIZE insertListM :: M.HashMap HashString b -> [(HashString, b)] -> M.HashMap HashString b #-}

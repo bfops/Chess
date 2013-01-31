@@ -4,8 +4,12 @@ module Game.Physics.Types ( Position
                           , PhysicsObject(..)
                           ) where
 
+import Prelewd
+
 import Control.DeepSeq
-import Numeric.LinearAlgebra
+import Numeric.LinearAlgebra hiding ((<>))
+
+import Text.Show
 
 type Position     = Vector Double
 type Velocity     = Vector Double
@@ -29,8 +33,8 @@ data PhysicsObject = PObject { pos      :: Position
                              }
 
 instance Show PhysicsObject where
-    show (PObject p v im _) = "pos = " ++ show p
-                            ++ " | vel = " ++ show v
-                            ++ " | invMass = " ++ show im
+    show (PObject p v im _) = "pos = " <> show p
+                            <> " | vel = " <> show v
+                            <> " | invMass = " <> show im
 
 instance NFData PhysicsObject

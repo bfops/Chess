@@ -1,16 +1,16 @@
 {-# LANGUAGE QuasiQuotes, OverloadedStrings, BangPatterns, CPP #-}
 module Main (main) where
 
+import Prelewd hiding ((!))
+
+import IO
+import Impure
+
 import Config
-import Control.Applicative
 import Control.DeepSeq
-import Control.MonadCond
 import Data.Array
 import qualified Data.HashMap.Strict as M
 import Data.HashString
-import Data.List
-import Data.Maybe
-import Data.Singleton
 import Game.Engine
 import Game.Input
 import qualified Game.Gameplay as G
@@ -20,15 +20,17 @@ import Game.Render
 import Game.Render.Colors
 import Game.Resource.Loader
 import Game.SceneGraph()
+import Storage.List
 import System.IO (stderr)
 import System.Log.Formatter
 import System.Log.Handler as H
 import System.Log.Handler.Simple
 import System.Log.Logger as L
+import Text.Show
 import Util.Defs
 
 -- | Initializes all the loggers' states to what was defined in the config file.
-configLogger :: IO ()
+configLogger :: SystemIO ()
 configLogger = do root <- getRootLogger
 
                   let formatter' = simpleLogFormatter Config.logFormat
@@ -48,7 +50,7 @@ configLogger = do root <- getRootLogger
                                                   L.setLevel prio
 
                   -- Set up all our custom logger levels.
-                  mapM_ addLogLevel Config.customLogLevels
+                  traverse_ addLogLevel Config.customLogLevels
 
 data GameState = GameState { t0      :: !Double -- ^ the time value of the last frame.
                            , rectPos :: Coord
@@ -67,7 +69,7 @@ data GameState = GameState { t0      :: !Double -- ^ the time value of the last 
 -- | Return the current state of the game.
 -- Will error if, somehow, (game gs) is empty.
 curGame :: GameState -> G.GameState
-curGame = head . game
+curGame = (<?> error "No game") . head . game
 
 instance NFData GameState where
     rnf gs = rnf (rectPos gs) `seq`
@@ -97,33 +99,37 @@ updateDisabledKeys gs us is = foldl' f gs us
                             (False, False) -> gs'
                             (True, True)   -> gs'
                             (True, False)  -> u gs' `withDisabledKeys` (k:)
-                            (False, True)  -> gs' `withDisabledKeys` const disabledKeys'
+                            (False, True)  -> gs' `withDisabledKeys` \_-> disabledKeys'
             where
                 -- | Removes an element from a list, returning whether or not anything was removed.
                 remove x = foldl' (\(!b, xs) y -> if x == y then (True, xs) else (b, y:xs)) (False, [])
 
 #define DEFPIECE(name) ([hashed|name|], [texRend|name|])
 
-pieceMap :: M.HashMap HashString Renderer
-pieceMap = M.fromList [ DEFPIECE("piece-b-b.png")
-                      , DEFPIECE("piece-b-k.png")
-                      , DEFPIECE("piece-b-n.png")
-                      , DEFPIECE("piece-b-p.png")
-                      , DEFPIECE("piece-b-q.png")
-                      , DEFPIECE("piece-b-r.png")
-                      , DEFPIECE("piece-w-b.png")
-                      , DEFPIECE("piece-w-k.png")
-                      , DEFPIECE("piece-w-n.png")
-                      , DEFPIECE("piece-w-p.png")
-                      , DEFPIECE("piece-w-q.png")
-                      , DEFPIECE("piece-w-r.png")
-                      ]
+pieceRenderer :: G.Color -> G.Piece -> Renderer
+pieceRenderer c pce = M.lookup (fileString c pce) pieceMap
+                    <?> error ("Couldn't find " <> show c <> " " <> show pce <> " to render")
+    where
+        pieceMap = M.fromList
+                [ DEFPIECE("piece-b-b.png")
+                , DEFPIECE("piece-b-k.png")
+                , DEFPIECE("piece-b-n.png")
+                , DEFPIECE("piece-b-p.png")
+                , DEFPIECE("piece-b-q.png")
+                , DEFPIECE("piece-b-r.png")
+                , DEFPIECE("piece-w-b.png")
+                , DEFPIECE("piece-w-k.png")
+                , DEFPIECE("piece-w-n.png")
+                , DEFPIECE("piece-w-p.png")
+                , DEFPIECE("piece-w-q.png")
+                , DEFPIECE("piece-w-r.png")
+                ]
 
 #undef DEFPIECE
 
 -- Get the filename of the texture to load for this piece.
 fileString :: G.Color -> G.Piece -> HashString
-fileString c p = toHashString $ "piece-" ++ (colorString c) ++ "-" ++ (pieceString p) ++ ".png"
+fileString c p = toHashString $ "piece-" <> (colorString c) <> "-" <> (pieceString p) <> ".png"
     where colorString G.White = "w"
           colorString G.Black = "b"
 
@@ -137,6 +143,9 @@ fileString c p = toHashString $ "piece-" ++ (colorString c) ++ "-" ++ (pieceStri
 -- Prevents recomputation of our piece hashstrings.
 allPieces :: [HashString]
 allPieces = [ fileString c p | c <- [G.White, G.Black] , p <- [minBound .. maxBound ] ]
+
+withChildren :: Renderer -> [Maybe Renderer] -> Renderer
+withChildren r c = r { children = mapMaybe id c }
 
 chessBoard :: GameState -> Renderer
 chessBoard gs | rendDims w /= rendDims b = error "White and black square textures are not the same size."
@@ -154,14 +163,14 @@ chessBoard gs | rendDims w /= rendDims b = error "White and black square texture
 
         tileRender :: Coord -> Renderer
         tileRender p@(x, y) = checkerRender `atIndex` p
-                                            `withChildren` (renderTileContents $ G.shift ('A', 1) p)
+                                            `withChildren` [renderTileContents (G.shift ('A', 1) p)]
             where checkerRender |     evenx &&     eveny = b
                                 | not evenx && not eveny = b
                                 | otherwise              = w
                   evenx = even x
                   eveny = even y
-                  renderTileContents = ifm <$> not.isMoving <*> map renderPiece . maybeToList . (gameBoard!)
-                  renderPiece (c, pce, _) = (fromJust $ M.lookup (fileString c pce) pieceMap)
+                  renderTileContents p' = guard (not $ isMoving p') >> renderPiece <$> gameBoard!p'
+                  renderPiece (c, pce, _) = (pieceRenderer c pce)
                                             { pos = Right (CenterAlign 0, CenterAlign 0) }
 
                   isMoving brdPos = maybe False (== brdPos) $ mvSrc gs
@@ -172,9 +181,6 @@ chessBoard gs | rendDims w /= rendDims b = error "White and black square texture
         atIndex :: Renderer -> Coord -> Renderer
         atIndex r = withPosition r . idx2pos
 
-        withChildren :: Renderer -> [Renderer] -> Renderer
-        withChildren r c = r { children = c }
-
         (dx, dy) = rendDims w
 
 display :: GameState -> Coord -> Renderer
@@ -182,18 +188,17 @@ display gs (x, y) = (rectangleRenderer 600 600 red)
                         { pos = Right ( CenterAlign 0
                                       , CenterAlign 0
                                       )
-                        , children = [ boardRender ] ++ moveRender
-                        }
+                        } `withChildren` [ Just boardRender, moveRender ]
                     where boardRender = (chessBoard gs)
                                            { pos = Right ( CenterAlign 0
                                                          , CenterAlign 0
                                                          )
                                             , rotation = rectRot gs
                                             }
-                          moveRender = maybeToList $ do mv <- mvSrc gs
-                                                        (c, pce, _) <- (G.board $ curGame gs)!mv
-                                                        return $ (fromJust $ M.lookup (fileString c pce) pieceMap)
-                                                                     { pos = Left (x - 144, y - 44) }
+                          moveRender = do mv <- mvSrc gs
+                                          (c, pce, _) <- (G.board $ curGame gs)!mv
+                                          return $ (pieceRenderer c pce)
+                                                   { pos = Left (x - 144, y - 44) }
 
 solveNewRot :: Double -> Double -> InputState -> Double
 solveNewRot r dt is = r + v*dt * fromIntegral
@@ -203,9 +208,9 @@ solveNewRot r dt is = r + v*dt * fromIntegral
         v = 1 -- velocity
 
 doMovement :: InputState -> GameState -> GameState
-doMovement is gs = fromMaybe gs $ mouseTile >>= mover
-
-    where mouseTile = mcond <$> tilePos <*> isValidPos $ mousePos is
+doMovement is gs = (mouseTile >>= mover) <?> gs
+    where
+          mouseTile = mcond <$> isValidPos <*> tilePos $ mousePos is
           tilePos (x, y) = G.shift ('A', 1) ((x - 144) `div` 64, (y - 44) `div` 64)
           isValidPos (x, y) = (x >= 144) && (x < 800 - 144)
                             && (y >= 44) && (y < 600 - 44)
@@ -215,7 +220,7 @@ doMovement is gs = fromMaybe gs $ mouseTile >>= mover
           addMove m = gs { game = m : (game gs) }
 
           mover t = if testKeys is [ LeftButton ]
-                    then mcond (select t) . isNothing $ mvSrc gs
+                    then mvSrc gs <&> (\_-> Nothing) <?> Just (select t)
                     else place t <$> mvSrc gs
 
 doUndo :: InputState -> GameState -> GameState
@@ -233,25 +238,25 @@ doPromote is gs = foldr promoteIfPressed gs [ ('q', G.Queen)
                                             , ('r', G.Rook)
                                             ]
     where promoteIfPressed (k, p) g = updateDisabledKeys g [(KeyChar k, tryPromote p)] is
-          tryPromote p g = maybe g (\x -> g { game = x:(game g) }) $ G.promote (head $ game g) p
+          tryPromote p g = maybe g (\x -> g { game = x:(game g) }) $ G.promote (curGame g) p
 
 doEnd :: GameState -> GameState
 doEnd = iff <$> isDone <*> reset <*> id
-    where isDone = single False (isJust . G.end) . game
+    where isDone g = G.end (curGame g) <&> (\_-> True) <?> False
           reset gs = gs { game = [G.initGame], mvSrc = Nothing}
 
-update :: GameState -> Double -> InputState -> IO (GameState, [ResourceRequest], Renderer)
+update :: GameState -> Double -> InputState -> SystemIO (GameState, [ResourceRequest], Renderer)
 update gs !t is = let gs' = foldr ($) gs [doEnd, doMovement is, doPromote is, doUndo is, doRot]
                    in return $!! ( gs'
                                  , [ load [hashed|"chess-square-w.png"|]
                                    , load [hashed|"chess-square-b.png"|]
-                                 ] ++ map load allPieces
+                                 ] <> map load allPieces
                                  , display gs' (mousePos is)
                                  )
     where
         dt | g0 > 0 = t - g0
            | g0 == 0 = 0 -- only happens on the first update.
-           | otherwise = error $ "So apparently, we have a time value less than 0: " ++ show g0
+           | otherwise = error $ "So apparently, we have a time value less than 0: " <> show g0
             where
                 g0 = t0 gs
         doRot gs' = gs' { t0 = t
@@ -264,6 +269,6 @@ initState = GameState 0 (400, 300) 0 [G.initGame] Nothing []
 
 -- Call initialization routines. Register callback function to display
 -- graphics. Enter main loop and process events.
-main :: IO ()
+main :: SystemIO ()
 main = configLogger
      >> runGame Config.windowTitle initState update

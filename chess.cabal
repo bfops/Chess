@@ -1,5 +1,5 @@
 Name:                Chess
-Version:             1.0
+Version:             1.1
 Description:         OMG CHESS.
 Category:            Games
 License:             MIT
@@ -15,9 +15,10 @@ Executable Chess
     hs-source-dirs:    src/
     Main-is:           Main.hs
     GHC-Options:       -Wall -threaded -rtsopts=all -fllvm -fno-warn-orphans
-    Extensions:        UnboxedTuples
+    Extensions:        UnboxedTuples, NoImplicitPrelude
 
     Build-Depends:     base,
+                       Step == 0.10,
                        containers ==0.*,
                        unordered-containers ==0.*,
                        transformers ==0.*,
@@ -30,10 +31,10 @@ Executable Chess
                        OpenGLRaw ==1.*,
                        OpenGL ==2.*,
                        GLUT ==2.*,
-                       JuicyPixels ==1.2,
+                       JuicyPixels ==2.0.*,
                        hslogger ==1.*,
                        array < 1,
-                       vector ==0.9.*,
+                       vector ==0.*,
                        StateVar ==1.*,
                        bytestring ==0.*,
                        template-haskell ==2.*,
@@ -43,7 +44,6 @@ Executable Chess
                        time ==1.*,
                        data-ivar ==0.*,
                        monad-par ==0.*,
-                       global-variables ==1.*,
                        tuple ==0.*,
                        hmatrix ==0.13.*,
                        test-framework ==0.*,
@@ -53,8 +53,10 @@ test-suite ChessTests
     type: exitcode-stdio-1.0
     main-is:    Test.hs
     hs-source-dirs: test/ src/
+    Extensions:     NoImplicitPrelude
 
     Build-Depends:  base >= 4 && < 5,
+                    Step == 0.10,
                     QuickCheck >= 2,
                     tuple,
                     array,

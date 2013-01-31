@@ -2,7 +2,11 @@
 -- | All built-in configuration goes here, to ease deployment and debugging.
 module Config where
 
+import Prelewd hiding (Text)
+
+import Data.String (String)
 import Data.Text
+import System.IO (FilePath)
 import System.Log.Logger
 import Util.Defs
 

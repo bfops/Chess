@@ -17,18 +17,20 @@ module Game.Gameplay ( Color(..)
                      , shift
                      ) where
 
-import Control.Applicative
+import Prelewd hiding ((!))
+
+import Impure
+
 import Control.DeepSeq
-import Control.Monad
-import Control.MonadCond
 import Data.Array.IArray
+import Data.Char
 import Data.Cycle
-import Data.Maybe
-import Data.List
-import Data.Singleton
 import Data.Tuple
 import Data.Tuple.All
+import Storage.List
+import Storage.Member
 import Test.Framework
+import Text.Show
 
 -- | Color of game pieces.
 data Color = White | Black
@@ -74,6 +76,7 @@ data GameState = GameState { board     :: Board
                              , taken     :: [PieceInfo]
                              -- ^ Which pieces have been taken from which sides?
                              }
+    deriving (Show, Eq)
 
 instance NFData GameState where
     rnf (GameState a b c d e) = rnf a `seq`
@@ -151,10 +154,10 @@ stepTo :: Position -> Position -> Position
 stepTo x = shift x . step x
 
 isOccupied :: Board -> Position -> Bool
-isOccupied gameBoard = isJust . (gameBoard!)
+isOccupied = not <$$> isEmpty
 
 isEmpty :: Board -> Position -> Bool
-isEmpty gameBoard = isNothing . (gameBoard!)
+isEmpty gameBoard p = (gameBoard!p) $> False <?> True
 
 isValidPosition :: Position -> Bool
 isValidPosition (f, r) | f < 'A' = False
@@ -195,9 +198,9 @@ destinations game src action = filter isValidTarget . evalPos $ npos action
 
 -- True iff `color` is in check on `board`.
 isCheck :: Color -> GameState -> Bool
-isCheck color game = single errorMsg (isThreatened.fst) . filter (maybe False isKing . snd) . assocs $ board game
+isCheck color game = isThreatened . fst <$> head (filter (maybe False isKing . snd) $ assocs $ board game) <?> errorMsg
     where
-          errorMsg = error $ "No " ++ show color ++ " king!"
+          errorMsg = error $ "No " <> show color <> " king!"
           threatens :: Position -> Position -> Bool
           threatens d s = maybe False (canTake d s) $ board game ! s
           canTake d s (c, piece, _) = color /= c && any (isThreat d s) (actionAttempts piece c)
@@ -209,15 +212,17 @@ isCheck color game = single errorMsg (isThreatened.fst) . filter (maybe False is
 
 end :: GameState -> Maybe EndState
 end gs = if canMove
-         then mcond Tie isMatDraw
+         then mcond isMatDraw Tie
          else Just $ if isCheck (turn gs) gs
                      then Win . prev $ turn gs
                      else Tie
     where
-          canMove = any (not.null) . mapMaybe myMoves . assocs $ board gs
+          canMove = any (not . null) $ mapMaybe myMoves $ assocs $ board gs
           isMatDraw = filter (/= King) material `elem` [ [], [ Knight ], [ Bishop ] ]
           material = mapMaybe (fmap sel2) . elems $ board gs
-          myMoves (s, t) = t >>= mcond <$> moves s <*> (turn gs ==).sel1
+
+          myMoves :: (Position, Maybe (Color, Piece, [Position])) -> Maybe [GameState]
+          myMoves (s, t) = t >>= mcond <$> (turn gs ==) . sel1 <*> moves s
           moves s (c, p, _) = mapMaybe (move gs s) . concatMap (destinations gs s) $ actionAttempts p c
 
 -- | Attempt to move the piece from `src` to `dest` on `gameBoard`.
@@ -236,15 +241,15 @@ move game src dest = mfilter preconds (gameBoard!src) >>= move' (game { board = 
     where isFriendlyFire :: Color -> Tile -> Bool
           isFriendlyFire color = maybe False $ (color ==) . sel1
 
-          preconds (c, _, _) = isNothing (promotion game)
+          preconds (c, _, _) = promotion game $> False <?> True
                              && c == turn game
                              && (not . isFriendlyFire c $ gameBoard!dest)
                                  
           actions (c, p, _) = filter (elem dest . destinations game src) $ actionAttempts p c
           move' game0 x@(c, _, _) = mfilter (not.isCheck c) $ fixTakes <$> game' (actions x) game0
-          game' as game0 = foldl' (\g f -> f g src dest) game0 . handlers <$> listToMaybe as
+          game' as game0 = foldl' (\g f -> f g src dest) game0 . handlers <$> head as
 
-          fixTakes gs = gs { taken = maybeToList (board gs ! dest) ++ (taken gs) }
+          fixTakes gs = gs { taken = (pure <$> board gs ! dest <?> []) <> (taken gs) }
 
           gameBoard = board game
 
@@ -262,7 +267,7 @@ promote g piece = guard canPromote >> promotion g >>= fmap <$> game' <*> (board 
 straightPath :: Board -> Position -> (Delta, Delta) -> [Position]
 straightPath gameBoard origin d = unfoldr stepFunc . Just $ shift origin d
     where stepFunc p = (\x -> (x, nextPos x)) <$> mfilter isValidPosition p
-          nextPos p = mcond (shift p d) $ isEmpty gameBoard p
+          nextPos p = mcond (isEmpty gameBoard p) $ shift p d
 
 -- Just moves the piece, no checking.
 makeMove :: Board -> Position -> Position -> Board
@@ -286,13 +291,13 @@ actionAttempts Pawn color = map addPromoteCheck
                             , Action Take (Disp (-1, pawnStep)) []           []
                             ]
     where doubStep = 2 * pawnStep
-          canDouble game src dest = null (sel3.fromJust $ board game ! src) && isEmpty (board game) (src `stepTo` dest)
+          canDouble game src dest = null (sel3 $ board game ! src <?> error "Empty double step") && isEmpty (board game) (src `stepTo` dest)
 
           (pawnStep, endRank) = if color == White
                                 then (1, 8)
                                 else (-1, 1)
 
-          fixPromote g _ d@(_, r) = g { promotion = mcond d $ r == endRank}
+          fixPromote g _ d@(_, r) = g { promotion = mcond (r == endRank) d }
 
           addPromoteCheck (Action a b c d) = Action a b c (fixPromote:d)
 
@@ -303,18 +308,18 @@ actionAttempts Pawn color = map addPromoteCheck
 actionAttempts Rook   _ = moveAndTake . map Path . symmetry $ map (0,) [-1, 1]
 actionAttempts Knight _ = moveAndTake . map Disp . symmetry $ [ (x, y) | x <- [-1, 1], y <- [-2, 2] ]
 actionAttempts Bishop _ = moveAndTake $ map Path [ (x, y) | x <- [-1, 1], y <- [-1, 1] ]
-actionAttempts Queen  c = actionAttempts Rook c ++ actionAttempts Bishop c
+actionAttempts Queen  c = actionAttempts Rook c <> actionAttempts Bishop c
 
-actionAttempts King color = castleMoves ++ moveAndTake [ Disp (x, y) | x <- [-1 .. 1], y <- [-1 .. 1] ]
+actionAttempts King color = castleMoves <> moveAndTake [ Disp (x, y) | x <- [-1 .. 1], y <- [-1 .. 1] ]
     where castleMoves = [ castleMove d | d <- [ (3, 0), (-4, 0) ] ]
           castleMove d@(x, y) = Action Move (Disp (2 * signum x, y)) [canCastle d] [castle d]
 
           castle d game src dest = game { board = makeMove (board game) (shift src d) (dest `stepTo` src) }
 
           canCastle d@(x, y) game src dest = isValidPosition (shift src d)
-                                           && fromMaybe False (null . sel3 <$> board game ! src)
-                                           && fromMaybe False (null . sel3 <$> board game ! shift src d)
-                                           && all (isEmpty $ board game) (init $ straightPath (board game) src (signum x, y))
+                                           && (null . sel3 <$> board game ! src) <?> False
+                                           && (null . sel3 <$> board game ! shift src d) <?> False
+                                           && all (isEmpty $ board game) (init (straightPath (board game) src (signum x, y)) <?> error "Empty path")
                                            && not (any isCheckThreat [src, src `stepTo` dest, dest])
             where isCheckThreat p = isCheck color $ game { board = makeMove (board game) src p
                                                          , turn = next $ turn game

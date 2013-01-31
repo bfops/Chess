@@ -9,7 +9,12 @@ module Game.Physics.Collision ( Point
                               , Intersectable(..)
                               ) where
 
-import Data.List
+import Prelewd hiding (toList, (<>))
+
+import Impure
+
+import Data.Tuple
+import Storage.List
 import Numeric.LinearAlgebra
 
 -- | "Axis-aligned bounding box."

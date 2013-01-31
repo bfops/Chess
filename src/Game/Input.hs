@@ -13,14 +13,21 @@ module Game.Input ( -- * Input State Management.
                   , onMotion
                   ) where
 
-import Control.Applicative ( (<$>) )
-import Control.Arrow
+import Prelewd hiding (empty)
+
+import IO
+
+import Impure
+
 import Control.Concurrent.STM
 import Control.DeepSeq
 import Data.Bits
-import Data.List as L
-import Data.Maybe
+import Data.Char
+import Data.List (partition)
 import Data.Typeable
+import Data.Tuple
+import Text.Read
+import Text.Show
 
 import qualified Graphics.UI.GLUT as GLUT
 
@@ -181,7 +188,7 @@ K2I(WheelDown,    285)
 --   make the second value of the tuple True, otherwise, if the key is up, make
 --   it False.
 updateKeyMask :: KeyMask -> [(Key, Bool)] -> KeyMask
-updateKeyMask m ks = let (on, off) = (map fst *** map fst) . L.partition snd $ map (first keyToIndex) ks
+updateKeyMask m ks = let (on, off) = (map fst *** map fst) . partition snd $ map2 keyToIndex <$> ks
                          off' = foldl' clearBit  m   off
                       in        foldl' setBit   off' on
 
@@ -211,14 +218,14 @@ onKeyMouse :: TVar InputState
            -> GLUT.KeyState
            -> GLUT.Modifiers
            -> GLUT.Position
-           -> IO ()
+           -> SystemIO ()
 onKeyMouse tis dims k ks ms (GLUT.Position x y) = atomically $
     do InputState keyboard _ <- readTVar tis
        (_, dy)               <- readTVar dims
        let k' = gk2k k
            km' = gm2k ms
         in writeTVar tis $!! InputState
-                               (updateKeyMask keyboard $ maybeToList ((,isDown ks) <$> k') ++ km')
+                               (updateKeyMask keyboard $ (k' <&> (,isDown ks) <&> (:[]) <?> []) <> km')
                                (fromIntegral x, dy-fromIntegral y) -- flip the y-coord. Fucking GLUT.
 
 -- | A GLUT 'motionCallback' that should be partially applied with a shared
@@ -230,7 +237,7 @@ onKeyMouse tis dims k ks ms (GLUT.Position x y) = atomically $
 onMotion :: TVar InputState
          -> TVar Dimensions
          -> GLUT.Position
-         -> IO ()
+         -> SystemIO ()
 onMotion tis dims (GLUT.Position x y) = atomically $
     do InputState k _ <- readTVar tis
        (_, dy)        <- readTVar dims

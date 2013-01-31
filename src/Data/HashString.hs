@@ -24,13 +24,19 @@ module Data.HashString ( -- * Normal Haskell Interface
                        , hashed
                        ) where
 
+import Prelewd
+
+import Impure
+
 import Control.DeepSeq
+import Data.Bits (xor)
 import Data.Hashable
 import Data.String
 import qualified Data.Text as T
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
 import Language.Haskell.TH.Syntax
+import Text.Show
 
 -- | The HashString constructor is exposed so it can be used with the 'hashed'
 --   quasiquoter. Please don't call it manually. If you want to construct a
@@ -79,7 +85,7 @@ fromHashString (HashString _ x) = x
 {-# INLINE fromHashString #-}
 
 instance Hashable HashString where
-    hash (HashString h _) = h
+    hashWithSalt s (HashString h _) = xor s h
 
 -- | The template haskell splice which lets us generate 'HashString's at
 --   compile-time. Use this like so:

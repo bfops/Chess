@@ -122,6 +122,10 @@ import Graphics.Rendering.OpenGL.Raw.Core31 ( GLbitfield
                                             , GLuint
                                             , GLushort
                                             )
+import Prelewd
+
+import Data.String (String)
+
 import System.Log.Logger
 
 vertex :: OGL.Vertex a => a -> GL ()

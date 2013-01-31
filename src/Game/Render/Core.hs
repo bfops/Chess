@@ -10,11 +10,11 @@ module Game.Render.Core ( Renderer(..)
                         , Align(..)
                         ) where
 
-import Control.Applicative
-import Control.Arrow
+import Prelewd
+
+import Impure
+
 import Control.DeepSeq ( NFData(..) )
-import Control.Monad
-import Data.Maybe
 import Game.Loaders
 import Graphics.Rendering.OpenGL.Monad
 import Util.Defs
@@ -99,7 +99,7 @@ instance NFData Renderer where
 --
 --   See: 'Renderer'
 defaultRenderer :: Renderer
-defaultRenderer = Renderer { render = const $ return ()
+defaultRenderer = Renderer { render = \_-> return ()
                            , pos = Left (0, 0)
                            , rendDims = (0, 0)
                            , rotateAround = Nothing
@@ -140,9 +140,9 @@ updateWindow ls rootDims rs = do clear [ ColorBuffer ]
                                     (w, h) = rendDims r
                                     center = (w `div` 2, h `div` 2)
                                 translate $ Vector3 (fromIntegral x) (fromIntegral y) (0 :: GLdouble)
-                                applyRotation (rotation r) (fromMaybe center $ rotateAround r)
+                                applyRotation (rotation r) (rotateAround r <?> center)
                                 render r ls
-                                forM_ (children r) $ render' (rendDims r)
+                                traverse_ (render' $ rendDims r) $ children r
 
 -- | To apply a rotation around a point, translate to that point, apply
 --   the rotation, then translate backwards. To visualize this, picture

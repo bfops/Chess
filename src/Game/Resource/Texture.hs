@@ -17,15 +17,19 @@ module Game.Resource.Texture ( Texture( texWidth, texHeight )
                              , imageHeight'
                              ) where
 
+import Prelewd
+
+import Impure
+import IO
+
 import           Codec.Picture                   as Pic
 import           Codec.Picture.Types             as PicTypes
 import qualified Config
-import           Control.Applicative
 import           Control.Concurrent.MVar
 import           Control.DeepSeq
-import           Data.Global
 import qualified Data.Text                       as T
 import           Data.Typeable
+import           Data.Tuple
 import qualified Data.Vector.Storable            as V
 import           Data.Word
 import           Foreign ( ForeignPtr, touchForeignPtr )
@@ -34,8 +38,11 @@ import           Foreign.Ptr
 import           Game.Resource.Loadable
 import qualified Graphics.Rendering.OpenGL.Monad as GL
 import qualified Graphics.Rendering.OpenGL.Monad.Unsafe as UGLY
+import           Storage.List
 import           System.FilePath
+import           System.IO.Unsafe
 import           System.Log.Logger
+import           Text.Show
 
 newtype TextureHandle = THandle GL.TextureObject
     deriving (Show, Eq, Ord, Typeable)
@@ -96,10 +103,10 @@ instance LoadableResource DynamicImage Texture where
 -- | A list of textures awaiting finalization.
 --   Yes, this is a global variable. Deal with it.
 toFinalize :: MVar [TextureHandle]
-toFinalize = declareMVar "Game.Texture.toFinalize" []
+toFinalize = unsafePerformIO $ newMVar []
 
 -- | Runs the finalizers of anything in the toFinalize list.
-cleanupFinalizers :: IO ()
+cleanupFinalizers :: SystemIO ()
 cleanupFinalizers = modifyMVar_ toFinalize (\x -> freeTex x >> return [])
     where
         freeTex = GL.runGraphics . GL.deleteObjectNames . map unHandle
@@ -129,25 +136,25 @@ noJPEG       img         = img
 --   Usage:
 --
 --   > do tex <- getImage "yellow-dot.png"
-getImage :: T.Text -> IO (Maybe DynamicImage)
+getImage :: T.Text -> SystemIO (Maybe DynamicImage)
 getImage name = do let name' = Config.texturePrefix </> T.unpack name
                    wrappedTex <- readImage name'
 
                    case wrappedTex of
                        Left err  -> do infoM "UI.TextureCache" $
-                                         "Could not load texture '" ++ T.unpack name ++ "' from '" ++ name' ++ "': " ++ err
+                                         "Could not load texture '" <> T.unpack name <> "' from '" <> name' <> "': " <> err
                                        return Nothing
                        Right tex -> return $ Just tex
 
 -- | Uploads an image into OpenGL's graphics memory.
 uploadTexture :: DynamicImage -> GL.GL Texture
-uploadTexture img = ((THandle . head) <$> GL.genObjectNames 1) >>= loadTexture' img
+uploadTexture img = ((THandle . (<?> error "out of object names") . head) <$> GL.genObjectNames 1) >>= loadTexture' img
 
 -- | Upoads multiple textures at once. Slightly more efficient than calling
 --   'loadTexture' repeatedly.
 uploadTextures :: [DynamicImage] -> GL.GL [Texture]
 uploadTextures xs = (map THandle <$> GL.genObjectNames (length xs))
-                 >>= mapM (uncurry loadTexture') . zip xs
+                 >>= traverse (uncurry loadTexture') . zip xs
 
 -- | Uploads a texture from memory into the graphics card. Internal
 --   implementation.
@@ -160,7 +167,7 @@ loadTexture' tex handle = do let tex'        = noJPEG tex -- OpenGL can't handle
                                  fmt         = pixelFormat tex'
 
                              GL.glDebugM "Game.Texture.loadTexture'"
-                                $ "Uploading a " ++ show width ++ "x" ++ show height ++ " texture into object " ++ show handle
+                                $ "Uploading a " <> show width <> "x" <> show height <> " texture into object " <> show handle
 
                              GL.textureBinding GL.Texture2D GL.$= Just (unHandle handle)
 

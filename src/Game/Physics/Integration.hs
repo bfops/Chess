@@ -2,10 +2,12 @@
 module Game.Physics.Integration ( integrate
                                 ) where
 
-import Control.Arrow
+import Prelewd
+
 import Control.Monad.ST
 import Data.Packed.Development ( at' )
 import Data.Packed.ST
+import Data.Tuple
 import Foreign.Storable ( Storable )
 import qualified Data.Vector as D -- oh god this'll get confusing.
 import Game.Physics.Types
@@ -70,7 +72,7 @@ integrate ps t = D.map (\((PObject _ _ im f), [s', v']) -> PObject s' v' im f)
                . concat
                . toBlocksEvery 2 dims
                . reshape width
-               . (!! 1) . toRows  -- second row.
+               . (! 1) . toRows  -- second row.
                . odeSolveV RKf45  -- Is there a better choice of integrator?
                            t      -- Not really sure about this. odeSolve uses t/100.
                            1.0e-5 -- arbitrary. Lower it if simulation blows
