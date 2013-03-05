@@ -6,7 +6,7 @@ before being committed.
 ## Dependencies
 
 - Haskell
-- [Step](https://github.com/RobotGymnast/Step)
+- [Summit](https://github.com/RobotGymnast/Summit)
 - OpenGL
 - A shit ton of haskell packages.
 

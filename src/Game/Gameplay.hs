@@ -178,8 +178,10 @@ initBoard = listArray (('A', 1), ('H', 8)) . concat $ transpose [ backRank White
                                                                 , backRank Black
                                                                 ]
     where backRank color = map (Just . (color,,[])) [ Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook ]
-          frontRank color = replicate 8 $ Just (color, Pawn, [])
-          otherRank = replicate 8 Nothing
+          frontRank color = replicate w $ Just (color, Pawn, [])
+          otherRank = replicate w Nothing
+
+          w = 8 :: Integer
 
 -- | Initial state of the game.
 initGame :: GameState
